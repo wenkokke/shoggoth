@@ -50,7 +50,9 @@ postprocessHtml5 outDir out html5 =
 --   The default site metadata, plus:
 --
 --     - @build_date@: The date at which the is website was last built, in the RFC822 format.
-getSiteMetadata :: FilePath -> Action Metadata
+getSiteMetadata ::
+  FilePath -> -- TODO: create Config object
+  Action Metadata
 getSiteMetadata siteYml = do
   siteMetadata <- readYaml' siteYml
   buildDateFld <- currentDateField rfc822DateFormat "build_date"
@@ -71,7 +73,7 @@ getFileWithMetadata ::
   ( ?routingTable :: RoutingTable,
     ?getSiteMetadata :: () -> Action Metadata
   ) =>
-  FilePath ->
+  FilePath -> -- TODO: create Config object
   FilePath ->
   Action (Metadata, Text)
 getFileWithMetadata outDir src = do
@@ -88,7 +90,7 @@ getFileWithMetadata outDir src = do
 
 -- | Get a template from the @templateDir@ directory.
 getTemplateFile ::
-  FilePath ->
+  FilePath -> -- TODO: create Config object
   FilePath ->
   Action Template
 getTemplateFile templateDir inputFile = do
