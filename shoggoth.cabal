@@ -89,6 +89,7 @@ library
     , yaml
 
 library shoggoth-agda
+  visibility:      public
   import:          language-haskell, install-agda
   hs-source-dirs:  shoggoth-agda
   exposed-modules: Shoggoth.Agda
@@ -102,6 +103,7 @@ library shoggoth-agda
     , text-regex-replace
 
 library shoggoth-hasmin
+  visibility:      public
   import:          language-haskell
   hs-source-dirs:  shoggoth-hasmin
   exposed-modules: Shoggoth.CSS.Minify
@@ -112,6 +114,7 @@ library shoggoth-hasmin
     , text
 
 library shoggoth-hsass
+  visibility:      public
   import:          language-haskell
   hs-source-dirs:  shoggoth-hsass
   exposed-modules: Shoggoth.CSS.Sass
