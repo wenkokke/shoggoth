@@ -6,6 +6,7 @@ module Shoggoth.Agda
   ( compileTo,
     Format (..),
     Library (..),
+    makeAgdaLinkFixer,
     makeLocalLinkFixer,
     makeLibraryLinkFixer,
     makeBuiltinLinkFixer,
@@ -31,13 +32,14 @@ import Control.Monad.Except (MonadError (throwError))
 import Data.List qualified as List
 import Data.Map (Map)
 import Data.Map qualified as Map
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, maybeToList)
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.ICU qualified as RE
 import Data.Text.ICU.Replace qualified as RE
 import Data.Text.IO qualified as Text
 import System.Directory qualified as System (doesFileExist)
+import Data.Monoid (Endo(..))
 
 compileTo :: Format -> [Library] -> FilePath -> FilePath -> Action ()
 compileTo fmt libs outDir src = do
@@ -102,6 +104,29 @@ htmlArgs outDir = ["--html", "--html-dir=" <> outDir, "--html-highlight=code"]
 
 latexArgs :: FilePath -> [String]
 latexArgs outDir = ["--latex", "--latex-dir=" <> outDir]
+
+--------------------------------------------------------------------------------
+-- Construct an Agda link fixer
+--------------------------------------------------------------------------------
+
+makeAgdaLinkFixer ::
+  (?routingTable :: RoutingTable) =>
+  Maybe Library ->
+  [Library] ->
+  [Library] ->
+  Action (Url -> Url)
+makeAgdaLinkFixer standardLibrary localLibraries otherLibraries = do
+  let maybeBuiltinLinkFixer = makeBuiltinLinkFixer <$> standardLibrary
+  maybeStandardLibraryLinkFixer <- traverse makeLibraryLinkFixer standardLibrary
+  localLinkFixers <- traverse makeLocalLinkFixer localLibraries
+  otherLinkFixers <- traverse makeLibraryLinkFixer otherLibraries
+  let linkFixers =
+        [ maybeToList maybeBuiltinLinkFixer,
+          maybeToList maybeStandardLibraryLinkFixer,
+          otherLinkFixers,
+          localLinkFixers
+        ]
+  return . appEndo . mconcat . fmap Endo . concat $ linkFixers
 
 --------------------------------------------------------------------------------
 -- Fix references to local Agda modules using a routing table
