@@ -1,5 +1,5 @@
-cabal-version: 2.4
-name:          wenkokke
+cabal-version: 3.0
+name:          shoggoth
 version:       0.1.0.0
 synopsis:      Build static web pages using
 homepage:      https://github.com/wenkokke/shoggoth#README
@@ -42,7 +42,7 @@ common language-haskell
 
 library
   import:          language-haskell
-  hs-source-dirs:  shoggoth/core
+  hs-source-dirs:  shoggoth
   exposed-modules:
     Shoggoth.PostInfo
     Shoggoth.Prelude
@@ -90,7 +90,7 @@ library
 
 library shoggoth-agda
   import:          language-haskell, install-agda
-  hs-source-dirs:  shoggoth/agda
+  hs-source-dirs:  shoggoth-agda
   exposed-modules: Shoggoth.Agda
   build-depends:
     , containers
@@ -103,7 +103,7 @@ library shoggoth-agda
 
 library shoggoth-hasmin
   import:          language-haskell
-  hs-source-dirs:  shoggoth/hasmin
+  hs-source-dirs:  shoggoth-hasmin
   exposed-modules: Shoggoth.CSS.Minify
   build-depends:
     , directory
@@ -113,7 +113,7 @@ library shoggoth-hasmin
 
 library shoggoth-hsass
   import:          language-haskell
-  hs-source-dirs:  shoggoth/hsass
+  hs-source-dirs:  shoggoth-hsass
   exposed-modules: Shoggoth.CSS.Sass
   build-depends:
     , directory
