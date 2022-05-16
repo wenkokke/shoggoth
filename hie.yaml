@@ -1,0 +1,10 @@
+cradle:
+  cabal:
+    - path: "./shoggoth/"
+      component: "lib:shoggoth"
+    - path: "./shoggoth-agda/"
+      component: "lib:shoggoth-agda"
+    - path: "./shoggoth-hasmin/"
+      component: "lib:shoggoth-hasmin"
+    - path: "./shoggoth-hsass/"
+      component: "lib:shoggoth-hsass"
