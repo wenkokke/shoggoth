@@ -39,6 +39,7 @@ library
   import:          language-haskell
   hs-source-dirs:  shoggoth
   exposed-modules:
+    Shoggoth
     Shoggoth.PostInfo
     Shoggoth.Prelude
     Shoggoth.Prelude.ByteString

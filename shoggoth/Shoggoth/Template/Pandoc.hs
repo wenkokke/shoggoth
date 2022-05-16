@@ -11,6 +11,11 @@ module Shoggoth.Template.Pandoc
   )
 where
 
+-- Citation (..),
+-- CitationMode (..),
+
+import Control.Exception (Exception (displayException))
+import Data.Text (Text)
 import Shoggoth.Prelude (Action, liftEither, liftIO)
 import Shoggoth.Template.Pandoc.Builder as PandocBuilderTypes
   ( Alignment (..),
@@ -19,8 +24,6 @@ import Shoggoth.Template.Pandoc.Builder as PandocBuilderTypes
     Blocks,
     Caption (..),
     Cell (..),
-    -- Citation (..),
-    -- CitationMode (..),
     ColSpan (..),
     ColSpec,
     ColWidth (..),
@@ -123,8 +126,6 @@ import Shoggoth.Template.Pandoc.Citeproc as PandocCiteprocTypes
   )
 import Shoggoth.Template.Pandoc.Postprocess as PandocPostprocess
 import Shoggoth.Template.Pandoc.Url as PandocUrl
-import Control.Exception (Exception (displayException))
-import Data.Text (Text)
 import Text.Pandoc as Pandoc hiding
   ( -- Redefined in Shoggoth.Template.Pandoc.Citeproc
     Citation (..),
@@ -135,18 +136,19 @@ import Text.Pandoc as Pandoc hiding
     getTemplateFile,
     renderTemplate,
   )
-import Text.Pandoc.Highlighting as PandocHighlighting
-    ( styleToCss,
-      pygments,
-      breezeDark,
-      espresso,
-      haddock,
-      kate,
-      monochrome,
-      tango,
-      zenburn )
-import Text.Pandoc.Highlighting qualified as PandocRenamed
 import Text.Pandoc.Class (PandocIO, runIO)
+import Text.Pandoc.Highlighting as PandocHighlighting
+  ( breezeDark,
+    espresso,
+    haddock,
+    kate,
+    monochrome,
+    pygments,
+    styleToCss,
+    tango,
+    zenburn,
+  )
+import Text.Pandoc.Highlighting qualified as PandocRenamed
 import Text.Pandoc.Readers as Pandoc
 import Text.Pandoc.Walk as Pandoc
 import Text.Pandoc.Writers as Pandoc
