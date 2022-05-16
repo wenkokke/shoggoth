@@ -17,11 +17,6 @@ flag install-agda
   manual:      True
   default:     False
 
-common install-agda
-  if flag(install-agda)
-    build-depends: Agda ==2.6.2.2
-    cpp-options:   -DinstallAgda
-
 common language-haskell
   default-language:   Haskell2010
   build-depends:      base
@@ -89,8 +84,8 @@ library
     , yaml
 
 library shoggoth-agda
+  import:          language-haskell
   visibility:      public
-  import:          language-haskell, install-agda
   hs-source-dirs:  shoggoth-agda
   exposed-modules: Shoggoth.Agda
   build-depends:
@@ -102,9 +97,13 @@ library shoggoth-agda
     , text-icu            ^>=0.7.1.0
     , text-regex-replace
 
+  if flag(install-agda)
+    build-depends: Agda ==2.6.2.2
+    cpp-options:   -DinstallAgda
+
 library shoggoth-hasmin
-  visibility:      public
   import:          language-haskell
+  visibility:      public
   hs-source-dirs:  shoggoth-hasmin
   exposed-modules: Shoggoth.CSS.Minify
   build-depends:
@@ -114,8 +113,8 @@ library shoggoth-hasmin
     , text
 
 library shoggoth-hsass
-  visibility:      public
   import:          language-haskell
+  visibility:      public
   hs-source-dirs:  shoggoth-hsass
   exposed-modules: Shoggoth.CSS.Sass
   build-depends:
