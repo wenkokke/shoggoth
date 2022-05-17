@@ -1,11 +1,12 @@
 module Shoggoth where
 
+import Control.Monad (forM)
 import Data.Default.Class (Default)
 import Data.Function ((&))
 import Data.Text (Text)
-import Shoggoth.Prelude (Action, Rules, implicitIndexFile, makeRelative, need, newCache, relativizeUrl, (</>))
-import Shoggoth.Routing (RoutingTable, route)
-import Shoggoth.Template.Metadata (Metadata, constField, currentDateField, lastModifiedISO8601Field, readFileWithMetadata', readYaml', rfc822DateFormat)
+import Shoggoth.Prelude (Action, Rules, implicitIndexFile, makeRelative, need, newCache, readFile', relativizeUrl, (</>))
+import Shoggoth.Routing (RoutingTable, route, routeAnchor, sources, Anchor)
+import Shoggoth.Template.Metadata (Metadata, constField, currentDateField, htmlTeaserField, lastModifiedISO8601Field, postDateField, readFileWithMetadata', readYaml', rfc822DateFormat, textTeaserField)
 import Shoggoth.Template.Pandoc (Pandoc)
 import Shoggoth.Template.Pandoc qualified as Pandoc
 import Shoggoth.Template.Pandoc.Builder qualified as Builder
@@ -44,12 +45,17 @@ postprocessHtml5 outDir out html5 =
     & Pandoc.postprocessHtml5
 
 --------------------------------------------------------------------------------
--- Metadata
+-- Getters
 
-newtype SiteMetadataConfig = SiteMetadataConfig {siteYaml :: FilePath}
+newtype SiteMetadataConfig = SiteMetadataConfig
+  { siteYaml :: FilePath
+  }
 
 instance Default SiteMetadataConfig where
-  def = SiteMetadataConfig {siteYaml = "site.yaml"}
+  def =
+    SiteMetadataConfig
+      { siteYaml = "site.yaml"
+      }
 
 -- | Get the default metadata for the website.
 --
@@ -65,10 +71,15 @@ makeSiteMetadataGetter SiteMetadataConfig {..} = newCache $ \() -> do
   let metadata = mconcat [siteMetadata, buildDateFld]
   return $ constField "site" metadata
 
-newtype FileWithMetadataConfig = FileWithMetadataConfig {outputDirectory :: FilePath}
+data FileWithMetadataConfig = FileWithMetadataConfig
+  {
+  }
 
 instance Default FileWithMetadataConfig where
-  def = FileWithMetadataConfig {outputDirectory = "out"}
+  def =
+    FileWithMetadataConfig
+      {
+      }
 
 -- | Get a file body and its metadata, including derived metadata.
 --
@@ -81,14 +92,15 @@ instance Default FileWithMetadataConfig where
 --     - @modified_date@: The date at which the file was last modified, in the ISO8601 format.
 --     - @build_date@: The date at which the is website was last built, in the RFC822 format.
 makeFileWithMetadataGetter ::
-  ( ?routingTable :: RoutingTable,
+  ( ?outputDirectory :: FilePath,
+    ?routingTable :: RoutingTable,
     ?getSiteMetadata :: () -> Action Metadata
   ) =>
   FileWithMetadataConfig ->
   Rules (FilePath -> Action (Metadata, Text))
-makeFileWithMetadataGetter FileWithMetadataConfig {..} = newCache $ \src -> do
+makeFileWithMetadataGetter FileWithMetadataConfig {} = newCache $ \src -> do
   out <- route src
-  let url = "/" <> makeRelative outputDirectory out
+  let url = "/" <> makeRelative ?outputDirectory out
   siteMetadata <- ?getSiteMetadata ()
   (fileMetadata, body) <- readFileWithMetadata' src
   let urlFld = constField "url" url
@@ -98,10 +110,15 @@ makeFileWithMetadataGetter FileWithMetadataConfig {..} = newCache $ \src -> do
   let metadata = mconcat [siteMetadata, fileMetadata, urlFld, bodyFld, sourceFld, modifiedDateFld]
   return (metadata, body)
 
-newtype TemplateFileConfig = TemplateFileConfig {templateDirectory :: FilePath}
+newtype TemplateFileConfig = TemplateFileConfig
+  { templateDirectory :: FilePath
+  }
 
 instance Default TemplateFileConfig where
-  def = TemplateFileConfig {templateDirectory = "templates"}
+  def =
+    TemplateFileConfig
+      { templateDirectory = "templates"
+      }
 
 -- | Get a template from the template directory.
 makeTemplateFileGetter ::
@@ -111,3 +128,103 @@ makeTemplateFileGetter TemplateFileConfig {..} = newCache $ \inputFile -> do
   let inputPath = templateDirectory </> inputFile
   need [inputPath]
   compileTemplateFile inputPath
+
+newtype PostWithMetadataConfig = PostWithMetadataConfig
+  { postDateFromFilePath :: Bool
+  }
+
+instance Default PostWithMetadataConfig where
+  def =
+    PostWithMetadataConfig
+      { postDateFromFilePath = True
+      }
+
+-- | Get a metadata object representing all posts.
+--
+--   This function adds the following metadata fields for each post,
+--   in addition to the metadata added by 'getFileWithMetadata':
+--
+--   - @date@: The date of the post, in a human readable format.
+--   - @date_rfc822@: The date of the post, in the RFC822 date format.
+makePostWithMetadataGetter ::
+  ( ?outputDirectory :: FilePath,
+    ?routingTable :: RoutingTable,
+    ?getFileWithMetadata :: FilePath -> Action (Metadata, Text)
+  ) =>
+  PostWithMetadataConfig ->
+  Rules (FilePath -> Action (Metadata, Text))
+makePostWithMetadataGetter PostWithMetadataConfig {..} = newCache $ \src -> do
+  (fileMetadata, body) <- ?getFileWithMetadata src
+  postDateMetadata <-
+    if not postDateFromFilePath
+      then mempty
+      else do
+        dateFld <- either fail return $ postDateField "%a %-d %b, %Y" src "date"
+        dateRfc822Fld <- either fail return $ postDateField rfc822DateFormat src "date_rfc822"
+        return $ mconcat [dateFld, dateRfc822Fld]
+  let metadata = mconcat [fileMetadata, postDateMetadata]
+  return (metadata, body)
+
+data PostListMetadataConfig = PostListMetadataConfig
+  { isPostSource :: FilePath -> Bool,
+    includeBodyFromAnchor :: Maybe Anchor,
+    includeTeaser :: Bool
+  }
+
+instance Default PostListMetadataConfig where
+  def =
+    PostListMetadataConfig
+      { isPostSource = const True,
+        includeBodyFromAnchor = Nothing,
+        includeTeaser = False
+      }
+
+-- | Get a metadata object representing all posts.
+--
+--   This function adds the following metadata fields for each post,
+--   in addition to the metadata added by 'getFileWithMetadata':
+--
+--   - @body_html@: The rendered HTML body of the source file.
+--   - @teaser_html@: The rendered HTML teaser for the post.
+--   - @teaser_plain@: The plain text teaser for the post.
+makePostListMetadataGetter ::
+  ( ?outputDirectory :: FilePath,
+    ?routingTable :: RoutingTable,
+    ?getPostWithMetadata :: FilePath -> Action (Metadata, Text)
+  ) =>
+  PostListMetadataConfig ->
+  Rules (() -> Action Metadata)
+makePostListMetadataGetter PostListMetadataConfig {..} = newCache $ \() -> do
+  -- Get posts from routing table
+  postSrcs <- filter isPostSource <$> sources
+  -- Gather metadata for each post
+  postsMetadata <- forM postSrcs $ \src -> do
+
+    -- Get output file for URL
+    out <- route src
+    let url = "/" <> makeRelative ?outputDirectory out
+    postMetadata <- fst <$> ?getPostWithMetadata src
+
+    -- Include body (optionally from anchor)
+    (body, bodyFldName) <-
+      case includeBodyFromAnchor of
+        Nothing -> do
+          body <- readFile' src
+          return (body, "body")
+        Just bodyAnchor -> do
+          body <- readFile' =<< routeAnchor bodyAnchor src
+          return (body, bodyAnchor)
+    let bodyMetadata = constField bodyFldName body
+
+    -- Include teaser (derived from body)
+    teaserMetadata <-
+      if not includeTeaser
+        then mempty
+        else do
+          -- Assumes body is HTML
+          teaserHtmlFld <- either fail return $ htmlTeaserField url body "teaser_html"
+          teaserPlainFld <- either fail return $ textTeaserField body "teaser_plain"
+          return $ mconcat [teaserHtmlFld, teaserPlainFld]
+    return $ mconcat [postMetadata, bodyMetadata, teaserMetadata]
+
+  return $ constField "post" (reverse postsMetadata)
