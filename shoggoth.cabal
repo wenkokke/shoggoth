@@ -65,6 +65,7 @@ library
     , charsetdetect
     , citeproc
     , containers
+    , data-default-class
     , directory
     , doclayout
     , filemanip             ^>=0.3

@@ -1,8 +1,9 @@
 module Shoggoth where
 
+import Data.Default.Class (Default)
 import Data.Function ((&))
 import Data.Text (Text)
-import Shoggoth.Prelude (Action, implicitIndexFile, makeRelative, need, relativizeUrl, (</>))
+import Shoggoth.Prelude (Action, Rules, implicitIndexFile, makeRelative, need, newCache, relativizeUrl, (</>))
 import Shoggoth.Routing (RoutingTable, route)
 import Shoggoth.Template.Metadata (Metadata, constField, currentDateField, lastModifiedISO8601Field, readFileWithMetadata', readYaml', rfc822DateFormat)
 import Shoggoth.Template.Pandoc (Pandoc)
@@ -45,19 +46,29 @@ postprocessHtml5 outDir out html5 =
 --------------------------------------------------------------------------------
 -- Metadata
 
+newtype SiteMetadataConfig = SiteMetadataConfig {siteYaml :: FilePath}
+
+instance Default SiteMetadataConfig where
+  def = SiteMetadataConfig {siteYaml = "site.yaml"}
+
 -- | Get the default metadata for the website.
 --
 --   The default site metadata, plus:
 --
 --     - @build_date@: The date at which the is website was last built, in the RFC822 format.
-getSiteMetadata ::
-  FilePath -> -- TODO: create Config object
-  Action Metadata
-getSiteMetadata siteYml = do
-  siteMetadata <- readYaml' siteYml
+makeSiteMetadataGetter ::
+  SiteMetadataConfig ->
+  Rules (() -> Action Metadata)
+makeSiteMetadataGetter SiteMetadataConfig {..} = newCache $ \() -> do
+  siteMetadata <- readYaml' siteYaml
   buildDateFld <- currentDateField rfc822DateFormat "build_date"
   let metadata = mconcat [siteMetadata, buildDateFld]
   return $ constField "site" metadata
+
+newtype FileWithMetadataConfig = FileWithMetadataConfig {outputDirectory :: FilePath}
+
+instance Default FileWithMetadataConfig where
+  def = FileWithMetadataConfig {outputDirectory = "out"}
 
 -- | Get a file body and its metadata, including derived metadata.
 --
@@ -69,16 +80,15 @@ getSiteMetadata siteYml = do
 --     - @source@: The path to the source file.
 --     - @modified_date@: The date at which the file was last modified, in the ISO8601 format.
 --     - @build_date@: The date at which the is website was last built, in the RFC822 format.
-getFileWithMetadata ::
+makeFileWithMetadataGetter ::
   ( ?routingTable :: RoutingTable,
     ?getSiteMetadata :: () -> Action Metadata
   ) =>
-  FilePath -> -- TODO: create Config object
-  FilePath ->
-  Action (Metadata, Text)
-getFileWithMetadata outDir src = do
+  FileWithMetadataConfig ->
+  Rules (FilePath -> Action (Metadata, Text))
+makeFileWithMetadataGetter FileWithMetadataConfig {..} = newCache $ \src -> do
   out <- route src
-  let url = "/" <> makeRelative outDir out
+  let url = "/" <> makeRelative outputDirectory out
   siteMetadata <- ?getSiteMetadata ()
   (fileMetadata, body) <- readFileWithMetadata' src
   let urlFld = constField "url" url
@@ -88,12 +98,16 @@ getFileWithMetadata outDir src = do
   let metadata = mconcat [siteMetadata, fileMetadata, urlFld, bodyFld, sourceFld, modifiedDateFld]
   return (metadata, body)
 
--- | Get a template from the @templateDir@ directory.
-getTemplateFile ::
-  FilePath -> -- TODO: create Config object
-  FilePath ->
-  Action Template
-getTemplateFile templateDir inputFile = do
-  let inputPath = templateDir </> inputFile
+newtype TemplateFileConfig = TemplateFileConfig {templateDirectory :: FilePath}
+
+instance Default TemplateFileConfig where
+  def = TemplateFileConfig {templateDirectory = "templates"}
+
+-- | Get a template from the template directory.
+makeTemplateFileGetter ::
+  TemplateFileConfig ->
+  Rules (FilePath -> Action Template)
+makeTemplateFileGetter TemplateFileConfig {..} = newCache $ \inputFile -> do
+  let inputPath = templateDirectory </> inputFile
   need [inputPath]
   compileTemplateFile inputPath
