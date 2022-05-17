@@ -4,7 +4,8 @@ import Control.Monad (forM)
 import Data.Default.Class (Default)
 import Data.Function ((&))
 import Data.Text (Text)
-import Shoggoth.Prelude (Action, Rules, implicitIndexFile, makeRelative, need, newCache, readFile', relativizeUrl, (</>))
+import Data.Text qualified as T
+import Shoggoth.Prelude (Action, Rules, implicitIndexFile, makeRelative, need, newCache, readFile', relativizeUrl, (</>), takeBaseName)
 import Shoggoth.Routing (RoutingTable, route, routeAnchor, sources, Anchor)
 import Shoggoth.Template.Metadata (Metadata, constField, currentDateField, htmlTeaserField, lastModifiedISO8601Field, postDateField, readFileWithMetadata', readYaml', rfc822DateFormat, textTeaserField)
 import Shoggoth.Template.Pandoc (Pandoc)
@@ -47,14 +48,16 @@ postprocessHtml5 outDir out html5 =
 --------------------------------------------------------------------------------
 -- Getters
 
-newtype SiteMetadataConfig = SiteMetadataConfig
-  { siteYaml :: FilePath
+data DefaultMetadataConfig = DefaultMetadataConfig
+  { defaultMetadataFiles :: [FilePath],
+    includeBuildDate :: Maybe Text
   }
 
-instance Default SiteMetadataConfig where
+instance Default DefaultMetadataConfig where
   def =
-    SiteMetadataConfig
-      { siteYaml = "site.yaml"
+    DefaultMetadataConfig
+      { defaultMetadataFiles = [],
+        includeBuildDate = Just "build_date"
       }
 
 -- | Get the default metadata for the website.
@@ -62,14 +65,17 @@ instance Default SiteMetadataConfig where
 --   The default site metadata, plus:
 --
 --     - @build_date@: The date at which the is website was last built, in the RFC822 format.
-makeSiteMetadataGetter ::
-  SiteMetadataConfig ->
+makeDefaultMetadataGetter ::
+  DefaultMetadataConfig ->
   Rules (() -> Action Metadata)
-makeSiteMetadataGetter SiteMetadataConfig {..} = newCache $ \() -> do
-  siteMetadata <- readYaml' siteYaml
-  buildDateFld <- currentDateField rfc822DateFormat "build_date"
-  let metadata = mconcat [siteMetadata, buildDateFld]
-  return $ constField "site" metadata
+makeDefaultMetadataGetter DefaultMetadataConfig {..} = newCache $ \() -> do
+  defaultMetadata <- forM defaultMetadataFiles $ \defaultMetadataFile -> do
+    scopeMetadata <- readYaml' defaultMetadataFile
+    let scopeName = T.pack $ takeBaseName defaultMetadataFile
+    return $ constField scopeName (scopeMetadata :: Metadata)
+  buildDateFld <-
+    maybe (return mempty) (currentDateField rfc822DateFormat) includeBuildDate
+  return $ mconcat defaultMetadata <> buildDateFld
 
 data FileWithMetadataConfig = FileWithMetadataConfig
   {
@@ -94,14 +100,14 @@ instance Default FileWithMetadataConfig where
 makeFileWithMetadataGetter ::
   ( ?outputDirectory :: FilePath,
     ?routingTable :: RoutingTable,
-    ?getSiteMetadata :: () -> Action Metadata
+    ?getDefaultMetadata :: () -> Action Metadata
   ) =>
   FileWithMetadataConfig ->
   Rules (FilePath -> Action (Metadata, Text))
 makeFileWithMetadataGetter FileWithMetadataConfig {} = newCache $ \src -> do
   out <- route src
   let url = "/" <> makeRelative ?outputDirectory out
-  siteMetadata <- ?getSiteMetadata ()
+  siteMetadata <- ?getDefaultMetadata ()
   (fileMetadata, body) <- readFileWithMetadata' src
   let urlFld = constField "url" url
   let bodyFld = constField "body" body
