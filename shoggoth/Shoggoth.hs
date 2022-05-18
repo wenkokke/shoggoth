@@ -209,7 +209,7 @@ makePostListMetadataGetter getPostWithMetadata PostListMetadataConfig {..} = new
     -- Get output file for URL
     out <- route src
     let url = "/" <> makeRelative ?outputDirectory out
-    postMetadata <- fst <$> ?getPostWithMetadata src
+    postMetadata <- fst <$> getPostWithMetadata src
 
     -- Include body (optionally from anchor)
     (body, bodyFldName) <-
