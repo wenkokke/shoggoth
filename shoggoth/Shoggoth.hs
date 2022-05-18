@@ -195,12 +195,12 @@ instance Default PostListMetadataConfig where
 --   - @teaser_plain@: The plain text teaser for the post.
 makePostListMetadataGetter ::
   ( ?outputDirectory :: FilePath,
-    ?routingTable :: RoutingTable,
-    ?getPostWithMetadata :: FilePath -> Action (Metadata, Text)
+    ?routingTable :: RoutingTable
   ) =>
+  (FilePath -> Action (Metadata, Text)) ->
   PostListMetadataConfig ->
   Rules (() -> Action Metadata)
-makePostListMetadataGetter PostListMetadataConfig {..} = newCache $ \() -> do
+makePostListMetadataGetter getPostWithMetadata PostListMetadataConfig {..} = newCache $ \() -> do
   -- Get posts from routing table
   postSrcs <- filter isPostSource <$> sources
   -- Gather metadata for each post
