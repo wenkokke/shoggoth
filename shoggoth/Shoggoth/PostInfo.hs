@@ -3,12 +3,13 @@ module Shoggoth.PostInfo (PostInfo (..), parsePostSource, parsePostOutput) where
 import Control.Monad.Except (MonadError (throwError))
 import Data.Char (isAlphaNum, isDigit)
 import Data.Functor (($>))
-import System.FilePath (splitFileName, dropTrailingPathSeparator)
+import System.FilePath (dropTrailingPathSeparator, joinPath, makeRelative, pathSeparator, splitFileName)
 import Text.ParserCombinators.ReadP
   ( ReadP,
     char,
     count,
     eof,
+    many,
     many1,
     munch1,
     readP_to_S,
@@ -17,8 +18,7 @@ import Text.ParserCombinators.ReadP
   )
 
 data PostInfo = PostInfo
-  { postDirectory :: FilePath,
-    postYear :: String,
+  { postYear :: String,
     postMonth :: String,
     postDay :: String,
     postSlug :: String,
@@ -33,31 +33,39 @@ runReadP p str = case readP_to_S p str of
   (_ : _) -> throwError $ "Ambiguous parse: " <> str
 
 parsePostSource :: MonadError String m => FilePath -> m PostInfo
-parsePostSource filePath =
-  let (directory, fileName) = splitFileName filePath
-   in runReadP (pPostSource $ dropTrailingPathSeparator directory) fileName
+parsePostSource = runReadP pPostSource
 
-pPostSource :: FilePath -> ReadP PostInfo
-pPostSource directory =
-  PostInfo directory <$> pYear <* char '-' <*> pMonth <* char '-' <*> pDay <* char '-' <*> pSlug <*> pFileExts <* eof
-  where
-    pYear = count 4 (satisfy isDigit)
-    pMonth = count 2 (satisfy isDigit)
-    pDay = count 2 (satisfy isDigit)
-    pSlug = munch1 (\c -> isAlphaNum c || c == '-')
-    pFileExts = many1 (char '.' *> munch1 isAlphaNum)
+pPostSource :: ReadP PostInfo
+pPostSource =
+  PostInfo
+    <$> pYear <* char '-'
+    <*> pMonth <* char '-'
+    <*> pDay <* char '-'
+    <*> pSlug
+    <*> pFileExts <* eof
 
 parsePostOutput :: MonadError String m => FilePath -> m PostInfo
-parsePostOutput filePath =
-  let (directory, fileName) = splitFileName filePath
-   in runReadP (pPostOutput $ dropTrailingPathSeparator directory) fileName
+parsePostOutput = runReadP pPostOutput
 
-pPostOutput :: FilePath -> ReadP PostInfo
-pPostOutput directory =
-  PostInfo directory <$> pYear <* char '/' <*> pMonth <* char '/' <*> pDay <* char '/' <*> pSlug <* char '/' <*> pIndexHtml <* eof
-  where
-    pYear = count 4 (satisfy isDigit)
-    pMonth = count 2 (satisfy isDigit)
-    pDay = count 2 (satisfy isDigit)
-    pSlug = munch1 (\c -> isAlphaNum c || c == '-')
-    pIndexHtml = string "index.html" $> []
+pPostOutput :: ReadP PostInfo
+pPostOutput =
+  PostInfo
+    <$> pYear <* char pathSeparator
+    <*> pMonth <* char pathSeparator
+    <*> pDay <* char pathSeparator
+    <*> pSlug <* char pathSeparator
+    <*> (string "index.html" $> []) <* eof
+
+pYear, pMonth, pDay :: ReadP String
+pYear = count 4 (satisfy isDigit)
+pMonth = count 2 (satisfy isDigit)
+pDay = count 2 (satisfy isDigit)
+
+pSlug :: ReadP String
+pSlug = munch1 (\c -> isAlphaNum c || c == '-')
+
+pFileExts :: ReadP [String]
+pFileExts = many1 (char '.' *> munch1 isAlphaNum)
+
+pFilePath :: ReadP FilePath
+pFilePath = joinPath <$> many (many1 (satisfy (/= pathSeparator) <* char pathSeparator))

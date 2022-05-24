@@ -205,7 +205,7 @@ postDateField fmt inputFile key = do
 
 dateFromPostFileName :: MonadError String m => FilePath -> m UTCTime
 dateFromPostFileName postFile = do
-  postInfo <- PostInfo.parsePostSource postFile
+  postInfo <- PostInfo.parsePostSource (takeFileName postFile)
   let year = read $ PostInfo.postYear postInfo
   let month = read $ PostInfo.postMonth postInfo
   let day = read $ PostInfo.postDay postInfo
