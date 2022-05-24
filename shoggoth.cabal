@@ -27,6 +27,7 @@ common language-haskell
     ImportQualifiedPost
     LambdaCase
     MultiParamTypeClasses
+    MultiWayIf
     OverloadedStrings
     PatternSynonyms
     RecordWildCards
@@ -39,24 +40,21 @@ library
   import:          language-haskell
   hs-source-dirs:  shoggoth
   exposed-modules:
-    Shoggoth
+    Shoggoth.Configuration
+    Shoggoth.Metadata
     Shoggoth.PostInfo
     Shoggoth.Prelude
     Shoggoth.Prelude.ByteString
     Shoggoth.Routing
-    Shoggoth.Template
     Shoggoth.Template.Pandoc
     Shoggoth.Template.Pandoc.Builder
     Shoggoth.Template.Pandoc.Citeproc
-    Shoggoth.Template.TagSoup
+    Shoggoth.TagSoup
 
   other-modules:
     Shoggoth.Prelude.FilePath
     Shoggoth.Prelude.Url
-    Shoggoth.Template.Metadata
-    Shoggoth.Template.Pandoc.Postprocess
     Shoggoth.Template.Pandoc.Url
-    Shoggoth.Template.Template
 
   build-depends:
     , aeson

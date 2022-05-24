@@ -1,10 +1,10 @@
 module Shoggoth.Template.Pandoc.Url where
 
-import Shoggoth.Prelude
-import Shoggoth.Template.TagSoup qualified as TagSoup
-import Text.Pandoc.Walk (walk)
-import Text.Pandoc.Definition (Pandoc, Format (..), Block (..), Inline (..))
 import Data.Function ((&))
+import Shoggoth.Prelude.Url (Url)
+import Shoggoth.TagSoup qualified as TagSoup
+import Text.Pandoc.Definition (Block (..), Format (..), Inline (..), Pandoc)
+import Text.Pandoc.Walk (walk)
 
 -- | Apply a function to each Url in a Pandoc document.
 withUrls :: (Url -> Url) -> Pandoc -> Pandoc

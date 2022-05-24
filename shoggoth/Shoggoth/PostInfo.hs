@@ -1,7 +1,9 @@
 module Shoggoth.PostInfo (PostInfo (..), parsePostSource, parsePostOutput) where
 
+import Control.Monad.Except (MonadError (throwError))
 import Data.Char (isAlphaNum, isDigit)
 import Data.Functor (($>))
+import System.FilePath (splitFileName, dropTrailingPathSeparator)
 import Text.ParserCombinators.ReadP
   ( ReadP,
     char,
@@ -10,16 +12,17 @@ import Text.ParserCombinators.ReadP
     many1,
     munch1,
     readP_to_S,
-    satisfy, string
+    satisfy,
+    string,
   )
-import Control.Monad.Except (MonadError (throwError))
 
 data PostInfo = PostInfo
-  { year :: String,
-    month :: String,
-    day :: String,
-    fileName :: String,
-    fileExts :: [String]
+  { postDirectory :: FilePath,
+    postYear :: String,
+    postMonth :: String,
+    postDay :: String,
+    postSlug :: String,
+    postFileExtensions :: [String]
   }
   deriving (Show)
 
@@ -29,48 +32,32 @@ runReadP p str = case readP_to_S p str of
   [(a, "")] -> return a
   (_ : _) -> throwError $ "Ambiguous parse: " <> str
 
-parsePostSource :: MonadError String m => String -> m PostInfo
-parsePostSource = runReadP pPostSource
+parsePostSource :: MonadError String m => FilePath -> m PostInfo
+parsePostSource filePath =
+  let (directory, fileName) = splitFileName filePath
+   in runReadP (pPostSource $ dropTrailingPathSeparator directory) fileName
 
-pPostSource :: ReadP PostInfo
-pPostSource =
-  PostInfo
-    <$> pYear
-    <* char '-'
-    <*> pMonth
-    <* char '-'
-    <*> pDay
-    <* char '-'
-    <*> pFileName
-    <*> pFileExts
-    <* eof
+pPostSource :: FilePath -> ReadP PostInfo
+pPostSource directory =
+  PostInfo directory <$> pYear <* char '-' <*> pMonth <* char '-' <*> pDay <* char '-' <*> pSlug <*> pFileExts <* eof
   where
     pYear = count 4 (satisfy isDigit)
     pMonth = count 2 (satisfy isDigit)
     pDay = count 2 (satisfy isDigit)
-    pFileName = munch1 (\c -> isAlphaNum c || c == '-')
+    pSlug = munch1 (\c -> isAlphaNum c || c == '-')
     pFileExts = many1 (char '.' *> munch1 isAlphaNum)
 
+parsePostOutput :: MonadError String m => FilePath -> m PostInfo
+parsePostOutput filePath =
+  let (directory, fileName) = splitFileName filePath
+   in runReadP (pPostOutput $ dropTrailingPathSeparator directory) fileName
 
-parsePostOutput :: MonadError String m => String -> m PostInfo
-parsePostOutput = runReadP pPostOutput
-
-pPostOutput :: ReadP PostInfo
-pPostOutput =
-  PostInfo
-    <$> pYear
-    <* char '/'
-    <*> pMonth
-    <* char '/'
-    <*> pDay
-    <* char '/'
-    <*> pPostSlug
-    <* char '/'
-    <*> pIndexHtml
-    <* eof
+pPostOutput :: FilePath -> ReadP PostInfo
+pPostOutput directory =
+  PostInfo directory <$> pYear <* char '/' <*> pMonth <* char '/' <*> pDay <* char '/' <*> pSlug <* char '/' <*> pIndexHtml <* eof
   where
     pYear = count 4 (satisfy isDigit)
     pMonth = count 2 (satisfy isDigit)
     pDay = count 2 (satisfy isDigit)
-    pPostSlug = munch1 (\c -> isAlphaNum c || c == '-')
+    pSlug = munch1 (\c -> isAlphaNum c || c == '-')
     pIndexHtml = string "index.html" $> []

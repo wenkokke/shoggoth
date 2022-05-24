@@ -4,40 +4,57 @@ module Shoggoth.Routing
     Anchor,
     RoutingTable,
     Stages (..),
+    pattern (:?),
     Router (..),
     route,
-    route',
     routeSource,
-    routeSource',
     routeNext,
-    routeNext',
     routePrev,
-    routePrev',
     routeAnchor,
-    routeAnchor',
     sources,
-    sources',
     outputs,
-    outputs',
+    permalinkRouter,
   )
 where
 
--- No pure route from posts/2016-03-01-insertion-sort-in-agda.lagda.md
--- CallStack (from HasCallStack):
---   error, called at shoggoth/agda/Shoggoth/Agda.hs:121:19 in wenkokke-0.1.0.0-inplace-shoggoth-agda:Shoggoth.Agda
-
 import Control.Monad (forM, join, (>=>))
+import Control.Monad.Except (MonadError (throwError))
 import Control.Monad.Identity (Identity (Identity, runIdentity))
 import Data.Bimap qualified as Bimap
-import Data.Function (fix)
+import Data.List qualified as List
 import Data.Map qualified as Map
 import Data.Maybe (catMaybes, fromMaybe, isJust, mapMaybe)
 import Data.Set qualified as Set
 import Data.String (IsString, fromString)
 import Data.Text (Text)
-import Shoggoth.Prelude (Action, FilePattern, getDirectoryFiles)
+import Data.Text qualified as Text
+import Shoggoth.Configuration (getOutputDirectory)
+import Shoggoth.Metadata (readYamlFrontmatter, (^.))
+import Shoggoth.Prelude (Action, FilePattern, getDirectoryFiles, getShakeExtra)
+import Shoggoth.Prelude.FilePath ((</>))
 import Text.Printf (printf)
-import Control.Monad.Except (MonadError (throwError))
+
+-- | Route files based on their permalink.
+permalinkRouter :: FilePath -> Action FilePath
+permalinkRouter src = do
+  outDir <- getOutputDirectory
+  yamlFrontmatter <- readYamlFrontmatter src
+  permalink <- either fail return $ yamlFrontmatter ^. "permalink"
+  let out = outDir </> removeLeadingSlash (Text.unpack permalink)
+  let outIsDir = "/" `List.isSuffixOf` out
+  return $ if outIsDir then out </> "index.html" else out
+
+removeLeadingSlash :: FilePath -> FilePath
+removeLeadingSlash path
+  | "/" `List.isPrefixOf` path = tail path
+  | otherwise = path
+
+getRoutingTable :: Action RoutingTable
+getRoutingTable = do
+  maybeRoutingTable <- getShakeExtra @RoutingTable
+  case maybeRoutingTable of
+    Just routingTable -> return routingTable
+    Nothing -> fail "Error: Missing `RoutingTable` from `shakeExtra`"
 
 type Anchor = Text
 
@@ -59,7 +76,7 @@ instance Semigroup RoutingTable where
       RoutingTable
         { routingTableSources = sources1 <> sources2,
           routingTableOutputs = outputs1 <> outputs2,
-          routingTableLinks = links1 <> links2,
+          routingTableLinks = links1 `bimapMerge` links2,
           routingTableAnchors = anchors1 <> anchors2,
           routingTableVolatile = case (maybeVolatile1, maybeVolatile2) of
             (Nothing, Nothing) -> Nothing
@@ -69,16 +86,24 @@ instance Semigroup RoutingTable where
         }
 
 instance Monoid RoutingTable where
-  mempty = RoutingTable mempty mempty mempty mempty mempty
+  mempty = RoutingTable mempty mempty memptyBimap mempty mempty
 
-infixr 5 :>:
+bimapMerge :: (Ord a, Ord b) => Bimap.Bimap a b -> Bimap.Bimap a b -> Bimap.Bimap a b
+bimapMerge bm1 bm2 = foldr (uncurry Bimap.insert) bm1 (Bimap.assocs bm2)
 
-infixr 5 :@:
+memptyBimap :: Bimap.Bimap a b
+memptyBimap = Bimap.empty
+
+infixr 5 :>
+
+infixr 5 :@
 
 data Stages
   = Output FilePath
-  | FilePath :>: Stages
-  | Anchor :@: Stages
+  | FilePath :> Stages
+  | Anchor :@ Stages
+
+pattern stages :? anchor = anchor :@ stages
 
 instance IsString Stages where
   fromString = Output
@@ -88,17 +113,17 @@ composeStages = composeStagesAcc []
   where
     composeStagesAcc :: [Anchor] -> Stages -> [([Anchor], FilePath)]
     composeStagesAcc anchors (Output output) = [(anchors, output)]
-    composeStagesAcc anchors (stage :>: stages) = (anchors, stage) : composeStages stages
-    composeStagesAcc anchors (anchor :@: stages) = composeStagesAcc (anchor : anchors) stages
+    composeStagesAcc anchors (stage :> stages) = (anchors, stage) : composeStages stages
+    composeStagesAcc anchors (anchor :@ stages) = composeStagesAcc (anchor : anchors) stages
 
 infix 3 |->
 
-infix 3 %->
+infix 3 *|->
 
 class Router router where
   (|->) :: [Source] -> router -> RoutingTable
-  (%->) :: [FilePattern] -> router -> RoutingTable
-  sourcePatterns %-> router =
+  (*|->) :: [FilePattern] -> router -> RoutingTable
+  sourcePatterns *|-> router =
     mempty
       { routingTableVolatile = Just $ do
           sources <- getDirectoryFiles "" sourcePatterns
@@ -131,6 +156,10 @@ instance Router (Source -> Stages) where
             routingTableAnchors = Map.fromList anchors
           }
 
+instance Router (Source -> Output) where
+  sources |-> outputFor =
+    sources |-> \source -> Output (outputFor source)
+
 instance Router (Source -> Either String Stages) where
   sources |-> router =
     either error id $ do
@@ -148,22 +177,23 @@ instance Router (Source -> Action Stages) where
 -- * Forward routing
 
 route :: (?routingTable :: RoutingTable) => FilePath -> Action Output
-route current = iterM step =<< routeNext current
+route current = do
+  iterM step =<< routeNext current
   where
     step current = routeNextPureFirst current ?routingTable
 
-route' :: (MonadError String m, ?routingTable :: RoutingTable) => FilePath -> m Output
-route' current = runIdentity . iterM step <$> routeNext' current
-  where
-    step current = Identity $ routeNextPureOnly current ?routingTable
+-- route' :: (MonadError String m, ?routingTable :: RoutingTable) => FilePath -> m Output
+-- route' current = runIdentity . iterM step <$> routeNext' current
+--   where
+--     step current = Identity $ routeNextPureOnly current ?routingTable
 
 routeNext :: (?routingTable :: RoutingTable) => FilePath -> Action FilePath
 routeNext current =
   either (\_ -> fail $ printf "No route from %s" current) return
     =<< routeNextPureFirst current ?routingTable
 
-routeNext' :: (MonadError String m, ?routingTable :: RoutingTable) => FilePath -> m FilePath
-routeNext' current = routeNextPureOnly current ?routingTable
+-- routeNext' :: (MonadError String m, ?routingTable :: RoutingTable) => FilePath -> m FilePath
+-- routeNext' current = routeNextPureOnly current ?routingTable
 
 routeNextPureFirst :: FilePath -> RoutingTable -> Action (Either String FilePath)
 routeNextPureFirst current = shortCircuit (routeNextPureOnly current)
@@ -176,23 +206,23 @@ routeNextPureOnly current routingTable =
 -- * Backward routing
 
 routeSource :: (?routingTable :: RoutingTable) => FilePath -> Action Source
-routeSource current = iterM step =<< routePrev current
+routeSource current = iterM step current
   where
     step current = routePrevPureFirst current ?routingTable
 
-routeSource' :: (MonadError String m, ?routingTable :: RoutingTable) => FilePath -> m Source
-routeSource' current = runIdentity . iterM step <$> routePrev' current
-  where
-    step current = Identity $ routePrevPureOnly current ?routingTable
+-- routeSource' :: (MonadError String m, ?routingTable :: RoutingTable) => FilePath -> m Source
+-- routeSource' current = runIdentity . iterM step <$> routePrev' current
+--   where
+--     step current = Identity $ routePrevPureOnly current ?routingTable
 
 routePrev :: (?routingTable :: RoutingTable) => FilePath -> Action FilePath
 routePrev current =
   either (\_ -> fail $ printf "No route to %s" current) return
     =<< routePrevPureFirst current ?routingTable
 
-routePrev' :: (MonadError String m, ?routingTable :: RoutingTable) => FilePath -> m FilePath
-routePrev' current =
-  routePrevPureOnly current ?routingTable
+-- routePrev' :: (MonadError String m, ?routingTable :: RoutingTable) => FilePath -> m FilePath
+-- routePrev' current =
+--   routePrevPureOnly current ?routingTable
 
 routePrevPureFirst :: FilePath -> RoutingTable -> Action (Either String FilePath)
 routePrevPureFirst current = shortCircuit (routePrevPureOnly current)
@@ -207,8 +237,8 @@ routePrevPureOnly current routingTable =
 routeAnchor :: (?routingTable :: RoutingTable) => Anchor -> Source -> Action FilePath
 routeAnchor anchor source = routeAnchorPureFirst anchor source ?routingTable
 
-routeAnchor' :: (MonadError String m, ?routingTable :: RoutingTable) => Anchor -> Source -> m FilePath
-routeAnchor' anchor source = routeAnchorPureOnly anchor source ?routingTable
+-- routeAnchor' :: (MonadError String m, ?routingTable :: RoutingTable) => Anchor -> Source -> m FilePath
+-- routeAnchor' anchor source = routeAnchorPureOnly anchor source ?routingTable
 
 routeAnchorPureFirst :: Anchor -> Source -> RoutingTable -> Action FilePath
 routeAnchorPureFirst anchor source routingTable =
@@ -220,17 +250,21 @@ routeAnchorPureOnly anchor source routingTable =
   maybe (throwError $ printf "No pure anchor %s for %s" (show anchor) source) return $
     Map.lookup (anchor, source) (routingTableAnchors routingTable)
 
+-- * All source or output files
+
 outputs :: (?routingTable :: RoutingTable) => Action [Output]
 outputs = Set.toAscList <$> gather routingTableOutputs ?routingTable
 
-outputs' :: (?routingTable :: RoutingTable) => [Output]
-outputs' = Set.toAscList $ routingTableOutputs ?routingTable
+-- outputs' :: (?routingTable :: RoutingTable) => [Output]
+-- outputs' = Set.toAscList $ routingTableOutputs ?routingTable
 
 sources :: (?routingTable :: RoutingTable) => Action [Source]
 sources = Set.toAscList <$> gather routingTableSources ?routingTable
 
-sources' :: (?routingTable :: RoutingTable) => [Source]
-sources' = Set.toAscList $ routingTableSources ?routingTable
+-- sources' :: (?routingTable :: RoutingTable) => [Source]
+-- sources' = Set.toAscList $ routingTableSources ?routingTable
+
+-- * Helpers
 
 shortCircuit :: (RoutingTable -> Either String result) -> RoutingTable -> Action (Either String result)
 shortCircuit op routingTable = do
@@ -256,9 +290,3 @@ gather op routingTable = do
 iterM :: Monad m => (result -> m (Either error result)) -> result -> m result
 iterM stepM current =
   either (\_ -> return current) (iterM stepM) =<< stepM current
-
-instance (Ord a, Ord b) => Semigroup (Bimap.Bimap a b) where
-  bm1 <> bm2 = foldr (uncurry Bimap.insert) bm1 (Bimap.assocs bm2)
-
-instance (Ord a, Ord b) => Monoid (Bimap.Bimap a b) where
-  mempty = Bimap.empty

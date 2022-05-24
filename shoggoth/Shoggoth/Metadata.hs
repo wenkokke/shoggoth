@@ -1,12 +1,8 @@
-module Shoggoth.Template.Metadata
+module Shoggoth.Metadata
   ( Metadata (..),
-    readYaml',
     readYaml,
-    writeYaml',
     writeYaml,
-    readYamlFrontmatter',
     readYamlFrontmatter,
-    readFileWithMetadata',
     readFileWithMetadata,
     (^.),
     (.~),
@@ -15,27 +11,31 @@ module Shoggoth.Template.Metadata
     postDateField,
     currentDateField,
     constField,
-    htmlTeaserField,
-    textTeaserField,
-    addTitleVariants,
+    titleVariantMetadata,
     resolveIncludes,
     rfc822DateFormat,
-    permalinkRouter,
+    htmlTeaserFieldFromHtml,
+    textTeaserFieldFromHtml
   )
 where
 
-import Shoggoth.PostInfo qualified as PostInfo
-import Shoggoth.Prelude
-import Shoggoth.Prelude.ByteString qualified as ByteString
-import Shoggoth.Template.Pandoc.Builder qualified as Builder
-import Shoggoth.Template.TagSoup qualified as TagSoup
+import Control.Monad.Except (MonadError (throwError))
 import Control.Monad.IO.Class (MonadIO)
 import Data.Aeson (encode, encodeFile)
 import Data.Aeson.Key qualified as Key
 import Data.Aeson.KeyMap qualified as KeyMap
 import Data.Aeson.Types as Aeson
+  ( FromJSON (parseJSON),
+    Object,
+    Result (..),
+    ToJSON (toJSON),
+    Value (Array, Object),
+    fromJSON,
+    withObject,
+  )
 import Data.ByteString (ByteString)
 import Data.ByteString qualified as ByteString
+import Data.Foldable (foldlM, foldrM)
 import Data.Frontmatter qualified as Frontmatter
 import Data.Function ((&))
 import Data.List qualified as List
@@ -46,12 +46,16 @@ import Data.Time (LocalTime (LocalTime), UTCTime, defaultTimeLocale, formatTime,
 import Data.Time.Format.ISO8601 (iso8601Show)
 import Data.Vector qualified as Vector (fromList)
 import Data.Yaml qualified as Yaml
+import Shoggoth.Configuration
+import Shoggoth.PostInfo qualified as PostInfo
+import Shoggoth.Prelude
+import Shoggoth.Prelude.ByteString qualified as ByteString
+import Shoggoth.TagSoup qualified as TagSoup
+import Shoggoth.Template.Pandoc.Builder qualified as Builder
 import System.Directory (getModificationTime)
 import System.IO.Unsafe (unsafePerformIO)
-import Text.Printf
 import Text.Pandoc.Citeproc qualified as Citeproc (getReferences)
-import Data.Foldable (foldrM, foldlM)
-import Control.Monad.Except (MonadError (throwError))
+import Text.Printf (printf)
 
 --------------------------------------------------------------------------------
 -- Metadata
@@ -95,36 +99,34 @@ Metadata obj ^. keyOrKeys = do
 --------------------------------------------------------------------------------
 
 -- | Read a YAML file as a Shake action.
-readYaml' :: FromJSON a => FilePath -> Action a
-readYaml' inputFile = do
+readYaml :: FromJSON a => FilePath -> Action a
+readYaml inputFile = do
   need [inputFile]
-  liftIO $ readYaml inputFile
+  liftIO $ readYamlIO inputFile
 
 -- | Read a YAML file.
-readYaml :: FromJSON a => FilePath -> IO a
-readYaml = Yaml.decodeFileThrow
+readYamlIO :: FromJSON a => FilePath -> IO a
+readYamlIO = Yaml.decodeFileThrow
 
 -- | Read the YAML frontmatter from a file as a Shake action.
-readYamlFrontmatter' :: FilePath -> Action Metadata
-readYamlFrontmatter' inputFile = do
+readYamlFrontmatter :: FilePath -> Action Metadata
+readYamlFrontmatter inputFile = do
   need [inputFile]
-  readYamlFrontmatter inputFile
+  readYamlFrontmatterIO inputFile
 
 -- | Read the YAML frontmatter from a file.
-readYamlFrontmatter :: MonadIO m => FilePath -> m Metadata
-readYamlFrontmatter inputFile =
-  liftIO $
-    fst <$> readFileWithMetadata inputFile
+readYamlFrontmatterIO :: MonadIO m => FilePath -> m Metadata
+readYamlFrontmatterIO inputFile = liftIO $ fst <$> readFileWithMetadataIO inputFile
 
 -- | Read a file with its YAML frontmatter and return both as a Shake action.
-readFileWithMetadata' :: FilePath -> Action (Metadata, Text)
-readFileWithMetadata' inputFile = do
+readFileWithMetadata :: FilePath -> Action (Metadata, Text)
+readFileWithMetadata inputFile = do
   need [inputFile]
-  readFileWithMetadata inputFile
+  readFileWithMetadataIO inputFile
 
 -- | Read a file with its YAML frontmatter and return both.
-readFileWithMetadata :: MonadIO m => FilePath -> m (Metadata, Text)
-readFileWithMetadata inputFile = liftIO $ do
+readFileWithMetadataIO :: MonadIO m => FilePath -> m (Metadata, Text)
+readFileWithMetadataIO inputFile = liftIO $ do
   contents <- ByteString.readFile inputFile
   case liftFrontmatterResult (Frontmatter.parseYamlFrontmatter contents) of
     -- Parse succeeded
@@ -145,11 +147,11 @@ readFileWithMetadata inputFile = liftIO $ do
     liftFrontmatterResult (Frontmatter.Fail _ contexts errorMessage) = Left (List.intercalate " > " contexts ++ ": " ++ errorMessage)
     liftFrontmatterResult _ = Left "incomplete input"
 
-writeYaml' :: ToJSON a => FilePath -> a -> Action ()
-writeYaml' outputFile a = liftIO $ Yaml.encodeFile outputFile a
+writeYaml :: ToJSON a => FilePath -> a -> Action ()
+writeYaml outputFile a = liftIO $ Yaml.encodeFile outputFile a
 
-writeYaml :: ToJSON a => FilePath -> a -> IO ()
-writeYaml = Yaml.encodeFile
+writeYamlIO :: ToJSON a => FilePath -> a -> IO ()
+writeYamlIO = Yaml.encodeFile
 
 -- * Instances
 
@@ -172,8 +174,10 @@ instance Monoid Metadata where
 -- Metadata fields
 --------------------------------------------------------------------------------
 
+type DateFormat = String
+
 -- | Variant of 'Data.Time.rfc822DateFormat' which actually conforms to RFC-822.
-rfc822DateFormat :: String
+rfc822DateFormat :: DateFormat
 rfc822DateFormat = "%a, %d %b %Y %H:%M:%S %z"
 
 -- | Create a metadata object containing the file modification time.
@@ -185,14 +189,14 @@ lastModifiedISO8601Field inputFile key = liftIO $ do
   return $ constField key (iso8601Show modificationTime)
 
 -- | Create a metadata object containing the current date.
-currentDateField :: String -> Text -> Action Metadata
+currentDateField :: DateFormat -> Text -> Action Metadata
 currentDateField fmt key = do
   currentTime <- liftIO getCurrentTime
   let currentTimeString = formatTime defaultTimeLocale fmt currentTime
   return $ constField key currentTimeString
 
 -- | Create a metadata object containing the date inferred from the file path.
-postDateField :: MonadError String m => String -> FilePath -> Text -> m Metadata
+postDateField :: MonadError String m => DateFormat -> FilePath -> Text -> m Metadata
 postDateField fmt inputFile key = do
   let inputFileName = takeFileName inputFile
   postDate <- dateFromPostFileName inputFileName
@@ -202,9 +206,9 @@ postDateField fmt inputFile key = do
 dateFromPostFileName :: MonadError String m => FilePath -> m UTCTime
 dateFromPostFileName postFile = do
   postInfo <- PostInfo.parsePostSource postFile
-  let year = read $ PostInfo.year postInfo
-  let month = read $ PostInfo.month postInfo
-  let day = read $ PostInfo.day postInfo
+  let year = read $ PostInfo.postYear postInfo
+  let month = read $ PostInfo.postMonth postInfo
+  let day = read $ PostInfo.postDay postInfo
   let dateTime = LocalTime (fromGregorian year month day) midday
   return $ localTimeToUTC utc dateTime
 
@@ -213,62 +217,49 @@ constField :: ToJSON a => Text -> a -> Metadata
 constField key a = mempty & key .~ a
 
 -- | Create a metadata object containing an HTML teaser constructed from the first argument.
-htmlTeaserField :: MonadError String m => FilePath -> Text -> Text -> m Metadata
-htmlTeaserField teaserUrl htmlBody key = do
-  let htmlBodyWithAbsoluteUrls = htmlTeaserFixUrl teaserUrl htmlBody
+htmlTeaserFieldFromHtml :: MonadError String m => FilePath -> Text -> Text -> m Metadata
+htmlTeaserFieldFromHtml teaserUrl htmlBody key = do
+  let htmlBodyWithAbsoluteUrls = makeAnchorsAbsolute teaserUrl htmlBody
+  -- NOTE: specific to Pandoc footnote IDs
   let htmlBodyWithoutFootnoteAnchorIds = TagSoup.removeFootnoteAnchorId htmlBodyWithAbsoluteUrls
-  htmlTeaserBody <- htmlTeaserBody htmlBodyWithoutFootnoteAnchorIds
-  return $ constField key htmlTeaserBody
+  extractTeaserHtml <- extractTeaserHtml htmlBodyWithoutFootnoteAnchorIds
+  return $ constField key extractTeaserHtml
 
 -- | Create a metadata object containing a plain-text teaser constructed from the first argument.
-textTeaserField :: MonadError String m => Text -> Text -> m Metadata
-textTeaserField htmlBody key = do
-  htmlTeaser <- htmlTeaserBody htmlBody
+textTeaserFieldFromHtml :: MonadError String m => Text -> Text -> m Metadata
+textTeaserFieldFromHtml htmlBody key = do
+  htmlTeaser <- extractTeaserHtml htmlBody
   let teaser = TagSoup.stripTags htmlTeaser
   return $ constField key teaser
 
-htmlTeaserFixUrl :: FilePath -> Text -> Text
-htmlTeaserFixUrl teaserUrl = TagSoup.withUrls $ \url ->
-  if "#" `Text.isPrefixOf` url
-    then Text.pack teaserUrl <> url
-    else url
+-- | Ensure that anchor URLs (e.g., "#README") to absolute URLs.
+--
+--   This is needed when embeddding part of one HTML document into
+--   another, e.g., for blog post teasers.
+makeAnchorsAbsolute :: FilePath -> Text -> Text
+makeAnchorsAbsolute absoluteUrl =
+  TagSoup.withUrls $ \url ->
+    if "#" `Text.isPrefixOf` url then Text.pack absoluteUrl <> url else url
 
-htmlTeaserBody :: MonadError String m => Text -> m Text
-htmlTeaserBody body
-  | Text.null rest = throwError "Delimiter '<!--more-->' not found"
-  | otherwise = return teaser
-  where
-    (teaser, rest) = Text.breakOn "<!--more-->" body
+-- | Extract the teaser from an HTML document.
+--
+--   NOTE: Takes the prefix up to '<!--more-->', which does not work if the
+--         prefix is not valid, e.g., for standalone HTML documents.
+extractTeaserHtml :: MonadError String m => Text -> m Text
+extractTeaserHtml body =
+  let (teaser, rest) = Text.breakOn "<!--more-->" body
+   in if not (Text.null rest) then return teaser else throwError "Delimiter '<!--more-->' not found"
 
 -- | Add running title and subtitle, if title contains a colon.
-addTitleVariants :: Metadata -> Metadata
-addTitleVariants metadata = case metadata ^. "title" of
-  Left _e -> metadata
-  Right title ->
-    let (titlerunning, subtitle) = Text.breakOn ":" title
-     in if Text.null subtitle
-          then metadata -- No titlerunning/subtitle distinction
-          else
-            metadata
-              & "titlerunning" .~ Text.strip titlerunning
-              & "subtitle" .~ Text.strip (Text.drop 1 subtitle)
-
--- | Route files based on their permalink.
-permalinkRouter :: FilePath -> [(String, String)] -> FilePath -> Rules FilePath
-permalinkRouter outDir extAssoc src = do
-  yamlFrontmatter <- liftIO $ readYamlFrontmatter src
-  permalink <- either fail return $ yamlFrontmatter ^. "permalink"
-  let out = outDir </> removeLeadingSlash (Text.unpack permalink)
-  let srcExt = takeExtension src
-  liftIO $ print srcExt
-  let indexFile = "index" <.> fromMaybe srcExt (List.lookup srcExt extAssoc)
-  let outIsDir = "/" `List.isSuffixOf` out
-  return $ if outIsDir then out </> indexFile else out
-
-removeLeadingSlash :: FilePath -> FilePath
-removeLeadingSlash path
-  | "/" `List.isPrefixOf` path = tail path
-  | otherwise = path
+titleVariantMetadata :: Text -> Metadata
+titleVariantMetadata title =
+  let (titlerunning, subtitle) = Text.breakOn ":" title
+   in if Text.null subtitle
+        then mempty -- No titlerunning/subtitle distinction
+        else
+          mempty
+            & "titlerunning" .~ Text.strip titlerunning
+            & "subtitle" .~ Text.strip (Text.drop 1 subtitle)
 
 -- | Resolve 'include' fields by including metadata from files.
 resolveIncludes :: (FilePath -> Action Metadata) -> Metadata -> Action Metadata

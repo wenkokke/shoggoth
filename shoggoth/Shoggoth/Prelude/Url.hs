@@ -1,19 +1,18 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 module Shoggoth.Prelude.Url where
 
-import Shoggoth.Prelude.FilePath
-  ( joinPath,
-    splitDirectories,
-    takeDirectory, makeRelative
-  )
 import Data.Text (Text)
 import Data.Text qualified as Text
+import Shoggoth.Prelude.FilePath
+  ( joinPath,
+    makeRelative,
+    splitDirectories,
+    takeDirectory
+  )
 
 type Url = Text
 
-implicitIndexFile :: Url -> Url
-implicitIndexFile = Text.replace "index.html" ""
+removeIndexHtml :: Url -> Url
+removeIndexHtml = Text.replace "index.html" ""
 
 -- | Make a Url relative to the site's root directory.
 --

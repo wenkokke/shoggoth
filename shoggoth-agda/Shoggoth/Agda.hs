@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE CPP #-}
 
 module Shoggoth.Agda
