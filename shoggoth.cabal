@@ -1,6 +1,6 @@
 cabal-version: 3.0
 name:          shoggoth
-version:       0.1.0.0
+version:       0.1
 synopsis:      Build static web pages using
 homepage:      https://github.com/wenkokke/shoggoth#README
 bug-reports:   https://github.com/wenkokke/shoggoth/issues
