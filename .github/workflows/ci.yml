@@ -15,9 +15,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macOS-latest, ubuntu-latest, windows-latest]
+        os: [macOS-latest] # ubuntu-latest, windows-latest
         ghc: ["8.10.7"]
-        cabal: ["3.6.2.0"]
+        cabal: ["latest"]
 
     steps:
       - name: Checkout
@@ -30,12 +30,12 @@ jobs:
           ghc-version: ${{ matrix.ghc }}
           cabal-version: ${{ matrix.cabal }}
 
-      - name: Cabal freeze
+      - name: Freeze
         run: |
           cabal v2-update
           cabal v2-freeze
 
-      - name: Cabal build
+      - name: Build
         run: cabal v2-build
 
 
