@@ -83,16 +83,16 @@ library
     , vector
     , yaml
 
-library shoggoth-agda
-  import:          language-haskell
-  visibility:      public
+-- library shoggoth-agda
+--   import:          language-haskell
+--   visibility:      public
   hs-source-dirs:  shoggoth-agda
   exposed-modules: Shoggoth.Agda
   build-depends:
     , containers
     , directory
     , mtl
-    , shoggoth
+    -- , shoggoth
     , text
     , text-icu            ^>=0.7.1.0
     , text-regex-replace
@@ -101,24 +101,24 @@ library shoggoth-agda
     build-depends: Agda ==2.6.2.2
     cpp-options:   -DinstallAgda
 
-library shoggoth-hasmin
-  import:          language-haskell
-  visibility:      public
+-- library shoggoth-hasmin
+--   import:          language-haskell
+--   visibility:      public
   hs-source-dirs:  shoggoth-hasmin
   exposed-modules: Shoggoth.CSS.Minify
   build-depends:
     , directory
     , hasmin
-    , shoggoth
+    -- , shoggoth
     , text
 
-library shoggoth-hsass
-  import:          language-haskell
-  visibility:      public
+-- library shoggoth-hsass
+--   import:          language-haskell
+--   visibility:      public
   hs-source-dirs:  shoggoth-hsass
   exposed-modules: Shoggoth.CSS.Sass
   build-depends:
     , directory
     , hsass      >=0.3.0
-    , shoggoth
+    -- , shoggoth
     , text
