@@ -36,7 +36,8 @@ jobs:
           cabal v2-freeze
 
       - name: Build
-        run: cabal v2-build
+        run: |
+          cabal v2-build
 
 
         
