@@ -1,6 +1,6 @@
 cabal-version: 3.0
 name:          shoggoth
-version:       0.1
+version:       0.1.0.0
 synopsis:      Build static web pages using
 homepage:      https://github.com/wenkokke/shoggoth#README
 bug-reports:   https://github.com/wenkokke/shoggoth/issues
@@ -38,21 +38,18 @@ common language-haskell
 
 library
   import:          language-haskell
-  hs-source-dirs:  shoggoth shoggoth-agda shoggoth-hasmin shoggoth-hsass
+  hs-source-dirs:  shoggoth
   exposed-modules:
-    Shoggoth.Agda
     Shoggoth.Configuration
-    Shoggoth.CSS.Minify
-    Shoggoth.CSS.Sass
     Shoggoth.Metadata
     Shoggoth.PostInfo
     Shoggoth.Prelude
     Shoggoth.Prelude.ByteString
     Shoggoth.Routing
-    Shoggoth.TagSoup
     Shoggoth.Template.Pandoc
     Shoggoth.Template.Pandoc.Builder
     Shoggoth.Template.Pandoc.Citeproc
+    Shoggoth.TagSoup
 
   other-modules:
     Shoggoth.Prelude.FilePath
@@ -60,7 +57,7 @@ library
     Shoggoth.Template.Pandoc.Url
 
   build-depends:
-    , aeson
+    , aeson                 ^>=2.0
     , bimap
     , bytestring
     , charsetdetect
@@ -72,8 +69,6 @@ library
     , filemanip             ^>=0.3
     , filepath
     , frontmatter
-    , hasmin
-    , hsass                 >=0.3.0
     , mtl
     , pandoc
     , pandoc-types
@@ -88,46 +83,42 @@ library
     , vector
     , yaml
 
+-- library shoggoth-agda
+--   import:          language-haskell
+--   visibility:      public
+  hs-source-dirs:  shoggoth-agda
+  exposed-modules: Shoggoth.Agda
+  build-depends:
+    , containers
+    , directory
+    , mtl
+    -- , shoggoth
+    , text
+    , text-icu            ^>=0.7.1.0
+    , text-regex-replace
+
   if flag(install-agda)
     build-depends: Agda ==2.6.2.2
     cpp-options:   -DinstallAgda
 
--- library shoggoth-agda
---   import:          language-haskell
---   visibility:      public
---   hs-source-dirs:  shoggoth-agda
---   exposed-modules: Shoggoth.Agda
---   build-depends:
---     , containers
---     , directory
---     , mtl
---     , shoggoth
---     , text
---     , text-icu            ^>=0.7.1.0
---     , text-regex-replace
-
---   if flag(install-agda)
---     build-depends: Agda ==2.6.2.2
---     cpp-options:   -DinstallAgda
-
 -- library shoggoth-hasmin
 --   import:          language-haskell
 --   visibility:      public
---   hs-source-dirs:  shoggoth-hasmin
---   exposed-modules: Shoggoth.CSS.Minify
---   build-depends:
---     , directory
---     , hasmin
---     , shoggoth
---     , text
+  hs-source-dirs:  shoggoth-hasmin
+  exposed-modules: Shoggoth.CSS.Minify
+  build-depends:
+    , directory
+    , hasmin
+    -- , shoggoth
+    , text
 
 -- library shoggoth-hsass
 --   import:          language-haskell
 --   visibility:      public
---   hs-source-dirs:  shoggoth-hsass
---   exposed-modules: Shoggoth.CSS.Sass
---   build-depends:
---     , directory
---     , hsass      >=0.3.0
---     , shoggoth
---     , text
+  hs-source-dirs:  shoggoth-hsass
+  exposed-modules: Shoggoth.CSS.Sass
+  build-depends:
+    , directory
+    , hsass      >=0.3.0
+    -- , shoggoth
+    , text
