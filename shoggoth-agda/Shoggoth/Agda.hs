@@ -219,13 +219,13 @@ getStandardLibraryVersion dir = liftIO $ do
 --------------------------------------------------------------------------------
 
 -- | Guess the path to which Agda writes the relevant output file.
-resolveLibraryAndOutputFileName :: MonadError String m => Format -> [Library] -> FilePath -> m (Library, FilePath)
+resolveLibraryAndOutputFileName :: MonadError String m => Format -> [Library] -> FilePath -> m (Library, FilePath, FilePath)
 resolveLibraryAndOutputFileName format libs inputFile = do
-  (lib, modulePath, moduleName) <- resolveModulePath libs inputFile
+  (lib, includePath, modulePath, moduleName) <- resolveModulePath libs inputFile
   let out = case format of
         Html -> Text.unpack moduleName <.> "md"
         LaTeX -> replaceExtensions modulePath "tex"
-  return (lib, out)
+  return (lib, includePath, out)
 
 -- | Convert a filepath to a module name.
 modulePathToName :: FilePath -> Text
@@ -234,24 +234,26 @@ modulePathToName path = Text.map sepToDot (Text.pack $ dropExtensions path)
     sepToDot c = if isPathSeparator c then '.' else c
 
 -- | Guess the module path based on the filename and the library.
-resolveModulePath :: MonadError String m => [Library] -> FilePath -> m (Library, FilePath, ModuleName)
+resolveModulePath :: MonadError String m => [Library] -> FilePath -> m (Library, FilePath, FilePath, ModuleName)
 resolveModulePath libs src = fromCandidates (resolveModuleForLibraries libs)
   where
     resolveModuleForLibraries :: MonadPlus m => [Library] -> m (Library, FilePath, ModuleName)
     resolveModuleForLibraries libs =
       msum [resolveModuleForLibrary lib | lib <- libs]
       where
-        resolveModuleForLibrary :: MonadPlus m => Library -> m (Library, FilePath, ModuleName)
+        resolveModuleForLibrary :: MonadPlus m => Library -> m (Library, FilePath, FilePath, ModuleName)
         resolveModuleForLibrary lib =
-          msum [resolveModuleForIncludePath includePath | includePath <- fullIncludePaths lib]
+          msum [resolveModuleForIncludePath (libraryRoot lib) includePath | includePath <- includePath lib]
           where
-            resolveModuleForIncludePath :: MonadPlus m => FilePath -> m (Library, FilePath, ModuleName)
-            resolveModuleForIncludePath fullIncludePath
+            resolveModuleForIncludePath :: MonadPlus m => FilePath ->  FilePath -> m (Library, FilePath, FilePath, ModuleName)
+            resolveModuleForIncludePath libraryRoot includePath
               | src `inDirectory` fullIncludePath =
                 let modulePath = makeRelative fullIncludePath src
                     moduleName = modulePathToName modulePath
-                 in return (lib, modulePath, moduleName)
+                 in return (lib, includePath, modulePath, moduleName)
               | otherwise = mzero
+              where
+                fullIncludePath = normaliseEx (libraryRoot </> includePath)
 
     fromCandidates :: (MonadError String m, Show a) => [a] -> m a
     fromCandidates [] = throwError $ "Could not find candidate for " <> src
