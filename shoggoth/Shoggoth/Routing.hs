@@ -40,13 +40,15 @@ permalinkRouter src = do
   outDir <- getOutputDirectory
   yamlFrontmatter <- readYamlFrontmatter src
   permalink <- either fail return $ yamlFrontmatter ^. "permalink"
-  let out = outDir </> removeLeadingSlash (Text.unpack permalink)
-  let outIsDir = "/" `List.isSuffixOf` out
-  return $ if outIsDir then out </> "index.html" else out
+  if permalink == "/"
+    then return $ outDir </> "index.html"
+    else do
+      let out = outDir </> removeLeadingSlash (Text.unpack permalink)
+      let outIsDir = "/" `List.isSuffixOf` out
+      return $ if outIsDir then out </> "index.html" else out
 
 removeLeadingSlash :: FilePath -> FilePath
 removeLeadingSlash src
-  | src == "/" = src
   | "/" `List.isPrefixOf` src = tail src
   | otherwise = src
 
