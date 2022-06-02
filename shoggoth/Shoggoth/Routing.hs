@@ -174,6 +174,10 @@ instance Router (Source -> Action Stages) where
           return . mconcat $ routingTables
       }
 
+instance Router (Source -> Action Output) where
+  sources |-> router =
+    sources |-> (fmap Output . router)
+
 -- * Forward routing
 
 route :: (?routingTable :: RoutingTable) => FilePath -> Action Output
