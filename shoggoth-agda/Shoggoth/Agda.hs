@@ -237,13 +237,13 @@ modulePathToName path = Text.map sepToDot (Text.pack $ dropExtensions path)
 resolveModulePath :: MonadError String m => [Library] -> FilePath -> m (Library, FilePath, FilePath, ModuleName)
 resolveModulePath libs src = fromCandidates (resolveModuleForLibraries libs)
   where
-    resolveModuleForLibraries :: MonadPlus m => [Library] -> m (Library, FilePath, ModuleName)
+    resolveModuleForLibraries :: MonadPlus m => [Library] -> m (Library, FilePath, FilePath, ModuleName)
     resolveModuleForLibraries libs =
       msum [resolveModuleForLibrary lib | lib <- libs]
       where
         resolveModuleForLibrary :: MonadPlus m => Library -> m (Library, FilePath, FilePath, ModuleName)
         resolveModuleForLibrary lib =
-          msum [resolveModuleForIncludePath (libraryRoot lib) includePath | includePath <- includePath lib]
+          msum [resolveModuleForIncludePath (libraryRoot lib) includePath | includePath <- includePaths lib]
           where
             resolveModuleForIncludePath :: MonadPlus m => FilePath ->  FilePath -> m (Library, FilePath, FilePath, ModuleName)
             resolveModuleForIncludePath libraryRoot includePath
