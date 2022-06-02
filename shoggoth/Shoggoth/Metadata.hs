@@ -1,9 +1,13 @@
 module Shoggoth.Metadata
   ( Metadata (..),
     readYaml,
+    readYamlIO,
     writeYaml,
+    writeYamlIO,
     readYamlFrontmatter,
+    readYamlFrontmatterIO,
     readFileWithMetadata,
+    readFileWithMetadataIO,
     (^.),
     (.~),
     (&),
