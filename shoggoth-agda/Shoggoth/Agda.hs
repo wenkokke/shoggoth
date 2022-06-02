@@ -9,8 +9,7 @@ module Shoggoth.Agda
     makeLibraryLinkFixer,
     makeBuiltinLinkFixer,
     getStandardLibrary,
-    htmlOutputPath,
-    latexOutputPath,
+    resolveLibraryAndOutputFileName,
     isAgdaFile,
   )
 where
@@ -219,20 +218,14 @@ getStandardLibraryVersion dir = liftIO $ do
 -- Guess to which file Agda writes HTML and LaTeX output
 --------------------------------------------------------------------------------
 
-htmlOutputPath :: MonadError String m => FilePath -> [Library] -> FilePath -> m FilePath
-htmlOutputPath = resolveOutputPath Html
-
-latexOutputPath :: MonadError String m => FilePath -> [Library] -> FilePath -> m FilePath
-latexOutputPath = resolveOutputPath LaTeX
-
 -- | Guess the path to which Agda writes the relevant output file.
-resolveOutputPath :: MonadError String m => Format -> FilePath -> [Library] -> FilePath -> m FilePath
-resolveOutputPath format outDir libs inputFile = do
+resolveLibraryAndOutputFileName :: MonadError String m => Format -> [Library] -> FilePath -> m (Library, FilePath)
+resolveLibraryAndOutputFileName format libs inputFile = do
   (lib, modulePath, moduleName) <- resolveModulePath libs inputFile
-  return $
-    case format of
-      Html -> outDir </> Text.unpack moduleName <.> "md"
-      LaTeX -> outDir </> replaceExtensions modulePath "tex"
+  let out = case format of
+        Html -> Text.unpack moduleName <.> "md"
+        LaTeX -> replaceExtensions modulePath "tex"
+  return (lib, out)
 
 -- | Convert a filepath to a module name.
 modulePathToName :: FilePath -> Text
