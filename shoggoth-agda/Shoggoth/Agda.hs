@@ -81,7 +81,7 @@ data Library = Library
   deriving (Eq, Show)
 
 fullIncludePaths :: Library -> [FilePath]
-fullIncludePaths lib@Library {..} = [libraryRoot </> includePath | includePath <- includePaths]
+fullIncludePaths lib@Library {..} = [normaliseEx (libraryRoot </> includePath) | includePath <- includePaths]
 
 libraryArgs :: [Library] -> [String]
 libraryArgs libs =
