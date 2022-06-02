@@ -30,9 +30,11 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Shoggoth.Configuration (getOutputDirectory)
 import Shoggoth.Metadata (readYamlFrontmatter, (^.))
-import Shoggoth.Prelude (Action, FilePattern, getDirectoryFiles, getShakeExtra)
+import Shoggoth.Prelude (Action, FilePattern, getDirectoryFiles, getShakeExtra, normaliseEx)
 import Shoggoth.Prelude.FilePath ((</>))
 import Text.Printf (printf)
+import Data.Traversable (for)
+import Control.Arrow (Arrow(second))
 
 -- | Route files based on their permalink.
 permalinkRouter :: FilePath -> Action FilePath
@@ -112,7 +114,7 @@ instance IsString Stages where
   fromString = Output
 
 composeStages :: Stages -> [([Anchor], FilePath)]
-composeStages = composeStagesAcc []
+composeStages stages = second normaliseEx <$> composeStagesAcc [] stages
   where
     composeStagesAcc :: [Anchor] -> Stages -> [([Anchor], FilePath)]
     composeStagesAcc anchors (Output output) = [(anchors, output)]
@@ -135,18 +137,20 @@ class Router router where
 
 instance Router Output where
   [source] |-> output =
+    let normalSource = normaliseEx source in
+    let normalOutput = normaliseEx output in
     mempty
-      { routingTableSources = Set.singleton source,
-        routingTableOutputs = Set.singleton output,
-        routingTableLinks = Bimap.singleton source output
+      { routingTableSources = Set.singleton normalSource,
+        routingTableOutputs = Set.singleton normalOutput,
+        routingTableLinks = Bimap.singleton normalSource normalOutput
       }
   _ |-> output =
-    error "Cannot route multiple sources to a single output"
+    error $ "Cannot route multiple sources to single output " <> output
 
 instance Router (Source -> Stages) where
   sources |-> stagesFor =
     mconcat $ do
-      source <- sources
+      source <- normaliseEx <$> sources
       let stages = composeStages (stagesFor source)
       let output = snd (last stages)
       let links = zip (source : map snd stages) (map snd stages)
@@ -166,14 +170,18 @@ instance Router (Source -> Output) where
 instance Router (Source -> Either String Stages) where
   sources |-> router =
     either error id $ do
-      routingTables <- traverse (\source -> do stages <- router source; return ([source] |-> const @Stages @Source stages)) sources
+      routingTables <- for sources $ \source -> do
+        stages <- router source
+        return $ [source] |-> const @Stages @Source stages
       return . mconcat $ routingTables
 
 instance Router (Source -> Action Stages) where
   sources |-> router =
     mempty
       { routingTableVolatile = Just $ do
-          routingTables <- traverse (\source -> do stages <- router source; return ([source] |-> const @Stages @Source stages)) sources
+          routingTables <- for sources $ \source -> do
+            stages <- router source
+            return $ [source] |-> const @Stages @Source stages
           return . mconcat $ routingTables
       }
 
