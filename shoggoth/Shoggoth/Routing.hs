@@ -45,9 +45,10 @@ permalinkRouter src = do
   return $ if outIsDir then out </> "index.html" else out
 
 removeLeadingSlash :: FilePath -> FilePath
-removeLeadingSlash path
-  | "/" `List.isPrefixOf` path = tail path
-  | otherwise = path
+removeLeadingSlash src
+  | src == "/" = src
+  | "/" `List.isPrefixOf` src = tail src
+  | otherwise = src
 
 getRoutingTable :: Action RoutingTable
 getRoutingTable = do
