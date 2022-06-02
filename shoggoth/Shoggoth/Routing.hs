@@ -215,8 +215,9 @@ routeNextPureFirst current = shortCircuit (routeNextPureOnly current)
 
 routeNextPureOnly :: MonadError String m => FilePath -> RoutingTable -> m FilePath
 routeNextPureOnly current routingTable =
-  maybe (throwError $ printf "No pure route from %s" current) return $
-    Bimap.lookup current (routingTableLinks routingTable)
+  let normalCurrent = normaliseEx current in
+    maybe (throwError $ printf "No pure route from %s" normalCurrent) return $
+      Bimap.lookup normalCurrent (routingTableLinks routingTable)
 
 -- * Backward routing
 
@@ -244,8 +245,9 @@ routePrevPureFirst current = shortCircuit (routePrevPureOnly current)
 
 routePrevPureOnly :: MonadError String m => FilePath -> RoutingTable -> m FilePath
 routePrevPureOnly current routingTable =
-  maybe (throwError $ printf "No pure route to %s" current) return $
-    Bimap.lookupR current (routingTableLinks routingTable)
+  let normalCurrent = normaliseEx current in
+    maybe (throwError $ printf "No pure route to %s" normalCurrent) return $
+      Bimap.lookupR normalCurrent (routingTableLinks routingTable)
 
 -- * Anchors
 
@@ -262,8 +264,9 @@ routeAnchorPureFirst anchor source routingTable =
 
 routeAnchorPureOnly :: MonadError String m => Anchor -> Source -> RoutingTable -> m FilePath
 routeAnchorPureOnly anchor source routingTable =
-  maybe (throwError $ printf "No pure anchor %s for %s" (show anchor) source) return $
-    Map.lookup (anchor, source) (routingTableAnchors routingTable)
+  let normalSource = normaliseEx source in
+  maybe (throwError $ printf "No pure anchor %s for %s" (show anchor) normalSource) return $
+    Map.lookup (anchor, normalSource) (routingTableAnchors routingTable)
 
 -- * All source or output files
 
