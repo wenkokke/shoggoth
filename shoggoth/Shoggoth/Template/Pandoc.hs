@@ -178,7 +178,9 @@ type HighlightStyle = PandocRenamed.Style
 
 runPandoc :: PandocIO a -> Action a
 runPandoc act = do
-  resultOrError <- liftIO (runIO act)
+  resultOrError <- liftIO . runIO $ do
+    modifyCommonState (\st -> st { stVerbosity = ERROR })
+    act
   liftEither displayException resultOrError
 
 -- * Markdown
