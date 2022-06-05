@@ -140,8 +140,8 @@ makeLocalLinkFixer lib@Library {..} = do
   moduleRoutes <- forM files $ \(includePath, file) -> do
     let src = libraryRoot </> includePath </> file
     let moduleName = modulePathToName file
-    out <- route src
-    return (moduleName, Text.pack out)
+    url <- routeUrl src
+    return (moduleName, url)
   let moduleRoutingTable = Map.fromList moduleRoutes
 
   return $ \url -> fromMaybe url $ do

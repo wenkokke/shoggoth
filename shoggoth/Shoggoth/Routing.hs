@@ -7,6 +7,7 @@ module Shoggoth.Routing
     pattern (:?),
     Router (..),
     route,
+    routeUrl,
     routeSource,
     routeNext,
     routePrev,
@@ -30,7 +31,7 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Shoggoth.Configuration (getOutputDirectory)
 import Shoggoth.Metadata (readYamlFrontmatter, (^.))
-import Shoggoth.Prelude (Action, FilePattern, getDirectoryFiles, getShakeExtra, normaliseEx)
+import Shoggoth.Prelude (Action, FilePattern, getDirectoryFiles, getShakeExtra, normaliseEx, Url, makeRelative)
 import Shoggoth.Prelude.FilePath ((</>))
 import Text.Printf (printf)
 import Data.Traversable (for)
@@ -196,6 +197,12 @@ route current = do
   iterM step =<< routeNext current
   where
     step current = routeNextPureFirst current ?routingTable
+
+routeUrl :: (?routingTable :: RoutingTable) => FilePath -> Action Url
+routeUrl current = do
+  outDir <- getOutputDirectory
+  out <- route current
+  return . Text.pack $ "/" <> makeRelative outDir out
 
 -- route' :: (MonadError String m, ?routingTable :: RoutingTable) => FilePath -> m Output
 -- route' current = runIdentity . iterM step <$> routeNext' current
