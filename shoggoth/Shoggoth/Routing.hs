@@ -3,6 +3,7 @@ module Shoggoth.Routing
     Output,
     Anchor,
     RoutingTable,
+    create,
     Stages (..),
     pattern (:?),
     Router (..),
@@ -109,6 +110,7 @@ data Stages
   | FilePath :> Stages
   | Anchor :@ Stages
 
+pattern (:?) :: Stages -> Anchor -> Stages
 pattern stages :? anchor = anchor :@ stages
 
 instance IsString Stages where
@@ -121,6 +123,9 @@ composeStages stages = second normaliseEx <$> composeStagesAcc [] stages
     composeStagesAcc anchors (Output output) = [(anchors, output)]
     composeStagesAcc anchors (stage :> stages) = (anchors, stage) : composeStages stages
     composeStagesAcc anchors (anchor :@ stages) = composeStagesAcc (anchor : anchors) stages
+
+create :: FilePath -> RoutingTable
+create out = mempty { routingTableOutputs = Set.singleton out }
 
 infix 3 |->
 
