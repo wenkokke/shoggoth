@@ -11,7 +11,7 @@ import Shoggoth.Prelude
 import Shoggoth.Prelude.ByteString qualified as BS (toText)
 import Data.Bitraversable (Bitraversable (..))
 import Data.Maybe (fromMaybe)
-import System.Directory as System (doesFileExist, makeAbsolute)
+import System.Directory as System (doesFileExist, makeAbsolute, getCurrentDirectory)
 import Text.Sass
 import Data.Text (Text)
 
@@ -47,7 +47,9 @@ compileSassWith opts filePath = do
     -- Extract generated CSS source and included files
     css <- BS.toText (resultString result)
     includes <- resultIncludes result
-    return (css, includes)
+    currentWorkingDirectory <- getCurrentDirectory
+    let relativeIncludes = makeRelative currentWorkingDirectory <$> includes
+    return (css, relativeIncludes)
 
   -- Inform Shake of the dependencies used during compilation
   trackRead includes
