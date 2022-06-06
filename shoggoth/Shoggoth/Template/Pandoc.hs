@@ -16,6 +16,7 @@ module Shoggoth.Template.Pandoc
     module PandocCiteprocTypes,
     HighlightStyle,
     module PandocHighlighting,
+    module PandocOptions,
     module PandocUrl,
     shiftHeadersBy,
   )
