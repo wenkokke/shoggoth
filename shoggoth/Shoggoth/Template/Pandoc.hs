@@ -1,5 +1,6 @@
 module Shoggoth.Template.Pandoc
   ( runPandoc,
+    runPandocWith,
     Template,
     markdownToPandoc,
     pandocToHtml5,
@@ -191,9 +192,12 @@ import Shoggoth.Configuration
 type HighlightStyle = PandocRenamed.Style
 
 runPandoc :: PandocIO a -> Action a
-runPandoc act = do
+runPandoc = runPandocWith ERROR
+
+runPandocWith :: Verbosity -> PandocIO a -> Action a
+runPandocWith v act = do
   resultOrError <- liftIO . runIO $ do
-    modifyCommonState (\st -> st { stVerbosity = ERROR })
+    modifyCommonState (\st -> st { stVerbosity = v })
     act
   liftEither displayException resultOrError
 
