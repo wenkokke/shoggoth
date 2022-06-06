@@ -1,8 +1,18 @@
 module Shoggoth.Configuration where
 
 import Data.Default.Class (Default (def))
-import Data.Maybe
-import Shoggoth.Prelude
+import Data.Maybe (fromMaybe)
+import Shoggoth.Prelude (Action, getShakeExtra)
+
+newtype CacheDirectory = CacheDirectory {fromCacheDirectory :: FilePath}
+
+instance Default CacheDirectory where
+  def = CacheDirectory "tmp"
+
+getCacheDirectory :: Action FilePath
+getCacheDirectory = do
+  maybeCacheDirectory <- getShakeExtra @CacheDirectory
+  return . fromCacheDirectory . fromMaybe def $ maybeCacheDirectory
 
 newtype OutputDirectory = OutputDirectory {fromOutputDirectory :: FilePath}
 

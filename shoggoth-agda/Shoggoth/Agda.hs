@@ -21,33 +21,36 @@ import System.Environment (withArgs, withProgName)
 import System.Exit (ExitCode (..))
 #endif
 
-import Shoggoth.Prelude
-import Shoggoth.Routing
 import Control.Monad (MonadPlus (mzero), forM, join, msum)
-import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Except (MonadError (throwError))
+import Control.Monad.IO.Class (MonadIO)
 import Data.List qualified as List
 import Data.Map (Map)
 import Data.Map qualified as Map
 import Data.Maybe (fromMaybe, maybeToList)
+import Data.Monoid (Endo (..))
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Data.Text.ICU qualified as RE
 import Data.Text.ICU.Replace qualified as RE
 import Data.Text.IO qualified as Text
+import Shoggoth.Configuration (getCacheDirectory)
+import Shoggoth.Prelude
+import Shoggoth.Routing
 import System.Directory qualified as System (doesFileExist)
-import Data.Monoid (Endo(..))
 
 compileTo :: Format -> [Library] -> FilePath -> FilePath -> Action ()
 compileTo fmt libs outDir src = do
   need [src]
-  runAgdaWith $ concat
-    [ ["--verbose=0"],
-      formatArgs fmt outDir,
-      libraryArgs libs,
-      [ src ]
-    ]
-
+  tmpDir <- getCacheDirectory
+  runAgdaWith $
+    concat
+      [ ["--compile-dir=" <> tmpDir],
+        ["--verbose=0"],
+        formatArgs fmt outDir,
+        libraryArgs libs,
+        [src]
+      ]
 
 #if installAgda
 runAgdaWith :: [String] -> Action ()
@@ -245,7 +248,7 @@ resolveModulePath libs src = fromCandidates (resolveModuleForLibraries libs)
         resolveModuleForLibrary lib =
           msum [resolveModuleForIncludePath (libraryRoot lib) includePath | includePath <- includePaths lib]
           where
-            resolveModuleForIncludePath :: MonadPlus m => FilePath ->  FilePath -> m (Library, FilePath, FilePath, ModuleName)
+            resolveModuleForIncludePath :: MonadPlus m => FilePath -> FilePath -> m (Library, FilePath, FilePath, ModuleName)
             resolveModuleForIncludePath libraryRoot includePath
               | src `inDirectory` fullIncludePath =
                 let modulePath = makeRelative fullIncludePath src
@@ -293,4 +296,3 @@ getAgdaFilesInDirectory dir =
 -- | Check if the path points to an Agda or literate Agda file.
 isAgdaFile :: FilePath -> Bool
 isAgdaFile src = any (?== src) ["//*.agda", "//*.lagda", "//*.lagda.md", "//*.lagda.org", "//*.lagda.rst", "//*.lagda.tex"]
-
