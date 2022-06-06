@@ -167,6 +167,19 @@ import Text.Pandoc.Highlighting as PandocHighlighting
     zenburn,
   )
 import Text.Pandoc.Highlighting qualified as PandocRenamed
+import Text.Pandoc.Options as PandocOptions
+  ( ReaderOptions (..)
+  , WriterOptions (..)
+  , HTMLMathMethod (..)
+  , CiteMethod (..)
+  , ObfuscationMethod (..)
+  , HTMLSlideVariant (..)
+  , EPUBVersion (..)
+  , WrapOption (..)
+  , TopLevelDivision (..)
+  , ReferenceLocation (..)
+  , TrackChanges (..)
+  )
 import Text.Pandoc.Readers as Pandoc
 import Text.Pandoc.Templates qualified as Template
 import Text.Pandoc.Walk as Pandoc
