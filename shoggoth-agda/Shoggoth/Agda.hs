@@ -42,11 +42,9 @@ import System.Directory qualified as System (doesFileExist)
 compileTo :: Format -> [Library] -> FilePath -> FilePath -> Action ()
 compileTo fmt libs outDir src = do
   need [src]
-  tmpDir <- getCacheDirectory
   runAgdaWith $
     concat
-      [ ["--compile-dir=" <> tmpDir],
-        ["--verbose=0"],
+      [ ["--verbose=0"],
         formatArgs fmt outDir,
         libraryArgs libs,
         [src]
