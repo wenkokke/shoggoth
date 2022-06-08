@@ -44,7 +44,6 @@ import System.Directory qualified as System (doesFileExist)
 
 compileTo :: Format -> [Library] -> FilePath -> FilePath -> Action ()
 compileTo fmt libs outDir src = do
-  need [src]
   runAgdaWith $
     concat
       [ ["--verbose=0"],
