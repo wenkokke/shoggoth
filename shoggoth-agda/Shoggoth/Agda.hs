@@ -11,6 +11,7 @@ module Shoggoth.Agda
     getStandardLibrary,
     resolveLibraryAndOutputFileName,
     isAgdaFile,
+    AgdaException (..),
   )
 where
 
@@ -21,6 +22,7 @@ import System.Environment (withArgs, withProgName)
 import System.Exit (ExitCode (..))
 #endif
 
+import Control.Exception (Exception, throwIO)
 import Control.Monad (MonadPlus (mzero), forM, join, msum)
 import Control.Monad.Except (MonadError (throwError))
 import Control.Monad.IO.Class (MonadIO)
@@ -34,6 +36,7 @@ import Data.Text qualified as Text
 import Data.Text.ICU qualified as RE
 import Data.Text.ICU.Replace qualified as RE
 import Data.Text.IO qualified as Text
+import Data.Typeable (Typeable)
 import Shoggoth.Configuration (getCacheDirectory)
 import Shoggoth.Prelude
 import Shoggoth.Routing
@@ -196,6 +199,13 @@ getStandardLibraryCanonicalBaseUrl dir = do
   ver <- getStandardLibraryVersion dir
   return $ "https://agda.github.io/agda-stdlib/" <> ver
 
+
+newtype AgdaException = AgdaStandardLibraryNotFound { changelogPath :: FilePath }
+    deriving (Show, Typeable)
+
+instance Exception AgdaException
+
+
 -- | Get the standard library version.
 getStandardLibraryVersion :: MonadIO m => FilePath -> m Text
 getStandardLibraryVersion dir = liftIO $ do
@@ -206,7 +216,7 @@ getStandardLibraryVersion dir = liftIO $ do
   let changelog = dir </> "CHANGELOG.md"
   correct <- System.doesFileExist changelog
   if not correct
-    then error $ "Could not find " <> changelog
+    then throwIO $ AgdaStandardLibraryNotFound changelog
     else do
       changelogContents <- Text.readFile changelog
       let verLine = head (Text.lines changelogContents)
