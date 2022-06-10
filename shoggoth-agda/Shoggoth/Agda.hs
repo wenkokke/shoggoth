@@ -76,7 +76,7 @@ getVersionAction = do
 getVersionAction :: Action Text
 getVersionAction = do
   Stdout versionLineString <- command [] "agda" ["--version"]
-  let versionLine = Text.pack versionLineString
+  let versionLine = Text.strip $ Text.pack versionLineString
   case Text.stripPrefix "Agda version " versionLine of
     Just agdaVersion -> do
       putInfo $ "Using Agda version " <> Text.unpack agdaVersion
