@@ -22,6 +22,7 @@ where
 
 #if installAgda
 import Agda.Main qualified as Agda
+import Agda.Version qualified as Agda
 import Control.Exception (handle, throwIO)
 import System.Environment (withArgs, withProgName)
 import System.Exit (ExitCode (..))
@@ -61,16 +62,28 @@ data AgdaException
 
 makeVersionOracle :: Rules ()
 makeVersionOracle = do
-  addOracle $ \AgdaVersionQuery{} -> do
-    Stdout versionLineString <- command [] "agda" ["--version"]
-    let versionLine = Text.pack versionLineString
-    case Text.stripPrefix "Agda version " versionLine of
-      Just agdaVersion -> do
-        putInfo $ "Using Agda version " <> Text.unpack agdaVersion
-        return agdaVersion
-      Nothing -> do
-        liftIO $ throwIO $ AgdaCannotParseVersionLine versionLine
+  addOracle $ \AgdaVersionQuery{} -> getVersionAction
   return ()
+
+
+
+#if installAgda
+getVersionAction :: Action Text
+getVersionAction = do
+  putInfo $ "Using Agda version " <> agdaVersion
+  return $ Text.pack Agda.version
+#else
+getVersionAction :: Action Text
+getVersionAction = do
+  Stdout versionLineString <- command [] "agda" ["--version"]
+  let versionLine = Text.pack versionLineString
+  case Text.stripPrefix "Agda version " versionLine of
+    Just agdaVersion -> do
+      putInfo $ "Using Agda version " <> Text.unpack agdaVersion
+      return agdaVersion
+    Nothing -> do
+      liftIO $ throwIO $ AgdaCannotParseVersionLine versionLine
+#endif
 
 getVersion :: Action Text
 getVersion = askOracle $ AgdaVersionQuery ()
