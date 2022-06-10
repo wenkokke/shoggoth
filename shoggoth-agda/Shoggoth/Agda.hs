@@ -12,6 +12,9 @@ module Shoggoth.Agda
     resolveLibraryAndOutputFileName,
     isAgdaFile,
     AgdaException (..),
+    AgdaVersion (..),
+    makeVersionOracle,
+    dependOnVersion
   )
 where
 
@@ -41,6 +44,29 @@ import Shoggoth.Configuration (getCacheDirectory)
 import Shoggoth.Prelude
 import Shoggoth.Routing
 import System.Directory qualified as System (doesFileExist)
+
+-- Agda version oracle
+
+newtype AgdaVersion = AgdaVersion ()
+  deriving (Show, Typeable, Eq, Hashable, Binary, NFData)
+
+type instance RuleResult AgdaVersion = String
+
+makeVersionOracle :: Rules (AgdaVersion -> Action String)
+makeVersracle = addOracle $ \AgdaVersion{} -> do
+  Stdout <- command [] "agda" ["--version"]
+  case List.stripPrefix "Agda version " out of
+    Just agdaVersion -> do
+      putInfo $ printf "Using Agda version %s" agdaVersion
+      return agdaVersion
+    Nothing -> do
+      putError $ printf "Could not parse output of 'agda --version':\n%s" out
+      liftIO $ exitWith (ExitFailure 1)
+
+dependOnAgdaVersion :: Action String
+dependOnAgdaVersion = askOracle $ AgdaVersion ()
+
+-- Compiling Agda
 
 compileTo :: Format -> [Library] -> FilePath -> FilePath -> Action ()
 compileTo fmt libs outDir src = do
