@@ -4,10 +4,12 @@ module Shoggoth.Prelude
     hasExecutable,
     isRunningOnCI,
     liftEither,
-    module Export
+    module Export,
+    module ExportClasses
   ) where
 
 import Development.Shake as Export hiding (readFile', writeFile')
+import Development.Shake.Classes as ExportClasses
 import Data.Text (Text)
 import Data.Text qualified as T
 import Data.Text.IO qualified as T
