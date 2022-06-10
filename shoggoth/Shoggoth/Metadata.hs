@@ -1,5 +1,6 @@
 module Shoggoth.Metadata
   ( Metadata (..),
+    toMetadata,
     readYaml,
     readYamlIO,
     writeYaml,
@@ -60,6 +61,7 @@ import System.Directory (getModificationTime)
 import System.IO.Unsafe (unsafePerformIO)
 import Text.Pandoc.Citeproc qualified as Citeproc (getReferences)
 import Text.Printf (printf)
+import GHC.Stack.Types (HasCallStack)
 
 --------------------------------------------------------------------------------
 -- Metadata
@@ -97,6 +99,11 @@ Metadata obj ^. keyOrKeys = do
     liftAesonResult = \case
       Aeson.Error msg -> throwError msg
       Aeson.Success a -> return a
+
+toMetadata :: HasCallStack => ToJSON a => a -> Metadata
+toMetadata a = case toJSON a of
+  Object obj -> Metadata obj
+  v -> error $ printf "Expected object, got '%s'" (show v)
 
 --------------------------------------------------------------------------------
 -- Reading and writing
