@@ -13,7 +13,7 @@ module Shoggoth.Agda
     isAgdaFile,
     AgdaException (..),
     makeVersionOracle,
-    getAgdaVersion,
+    getVersion,
     AgdaStandardLibraryException (..),
     makeStandardLibraryOracle,
     getStandardLibrary
@@ -72,8 +72,8 @@ makeVersionOracle = do
         liftIO $ throwIO $ AgdaCannotParseVersionLine versionLine
   return ()
 
-getAgdaVersion :: Action Text
-getAgdaVersion = askOracle $ AgdaVersionQuery ()
+getVersion :: Action Text
+getVersion = askOracle $ AgdaVersionQuery ()
 
 -- Compiling Agda
 
