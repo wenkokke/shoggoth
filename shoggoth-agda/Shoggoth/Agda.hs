@@ -8,13 +8,15 @@ module Shoggoth.Agda
     makeLocalLinkFixer,
     makeLibraryLinkFixer,
     makeBuiltinLinkFixer,
-    getStandardLibrary,
+    getStandardLibraryIO,
     resolveLibraryAndOutputFileName,
     isAgdaFile,
     AgdaException (..),
-    AgdaVersion (..),
     makeVersionOracle,
-    dependOnVersion
+    getAgdaVersion,
+    AgdaStandardLibraryException (..),
+    makeStandardLibraryOracle,
+    getStandardLibrary
   )
 where
 
@@ -40,6 +42,7 @@ import Data.Text.ICU qualified as RE
 import Data.Text.ICU.Replace qualified as RE
 import Data.Text.IO qualified as Text
 import Data.Typeable (Typeable)
+import GHC.Generics (Generic)
 import Shoggoth.Configuration (getCacheDirectory)
 import Shoggoth.Prelude
 import Shoggoth.Routing
@@ -47,24 +50,30 @@ import System.Directory qualified as System (doesFileExist)
 
 -- Agda version oracle
 
-newtype AgdaVersion = AgdaVersion ()
-  deriving (Show, Typeable, Eq, Hashable, Binary, NFData)
+newtype AgdaVersionQuery = AgdaVersionQuery ()
+  deriving (Show, Typeable, Eq, Generic, Hashable, Binary, NFData)
 
-type instance RuleResult AgdaVersion = String
+type instance RuleResult AgdaVersionQuery = Text
 
-makeVersionOracle :: Rules (AgdaVersion -> Action String)
-makeVersracle = addOracle $ \AgdaVersion{} -> do
-  Stdout <- command [] "agda" ["--version"]
-  case List.stripPrefix "Agda version " out of
-    Just agdaVersion -> do
-      putInfo $ printf "Using Agda version %s" agdaVersion
-      return agdaVersion
-    Nothing -> do
-      putError $ printf "Could not parse output of 'agda --version':\n%s" out
-      liftIO $ exitWith (ExitFailure 1)
+data AgdaException
+    = AgdaCannotParseVersionLine Text
+    deriving (Show, Typeable, Exception)
 
-dependOnAgdaVersion :: Action String
-dependOnAgdaVersion = askOracle $ AgdaVersion ()
+makeVersionOracle :: Rules ()
+makeVersionOracle = do
+  addOracle $ \AgdaVersionQuery{} -> do
+    Stdout versionLineString <- command [] "agda" ["--version"]
+    let versionLine = Text.pack versionLineString
+    case Text.stripPrefix "Agda version " versionLine of
+      Just agdaVersion -> do
+        putInfo $ "Using Agda version " <> Text.unpack agdaVersion
+        return agdaVersion
+      Nothing -> do
+        liftIO $ throwIO $ AgdaCannotParseVersionLine versionLine
+  return ()
+
+getAgdaVersion :: Action Text
+getAgdaVersion = askOracle $ AgdaVersionQuery ()
 
 -- Compiling Agda
 
@@ -96,7 +105,7 @@ type ModuleName = Text
 data Format
   = Html
   | LaTeX
-  deriving (Eq, Ord, Show)
+  deriving (Show, Typeable, Eq)
 
 data Library = Library
   { -- | The directory which contains the .agda-lib file.
@@ -106,7 +115,7 @@ data Library = Library
     -- | A canonical URL to which to redirect links.
     canonicalBaseUrl :: Url
   }
-  deriving (Eq, Show)
+  deriving (Show, Typeable, Eq, Generic, Hashable, Binary, NFData)
 
 fullIncludePaths :: Library -> [FilePath]
 fullIncludePaths lib@Library {..} = [normaliseEx (libraryRoot </> includePath) | includePath <- includePaths]
@@ -209,31 +218,48 @@ reAgdaBuiltinLink :: RE.Regex
 reAgdaBuiltinLink = RE.regex [] "(Agda\\.[A-Za-z\\.]+)\\.html(#[^\"^']+)?"
 
 --------------------------------------------------------------------------------
--- Blag a library instance for the standard library
+-- A library instance for the standard library
 --------------------------------------------------------------------------------
 
-getStandardLibrary :: MonadIO m => FilePath -> m Library
-getStandardLibrary libraryRoot = do
+newtype AgdaStandardLibraryQuery = AgdaStandardLibraryQuery ()
+  deriving (Show, Typeable, Eq, Generic, Hashable, Binary, NFData)
+
+type instance RuleResult AgdaStandardLibraryQuery = Library
+
+data AgdaStandardLibraryException
+    = AgdaStandardLibraryNotFound FilePath
+    | AgdaStandardLibraryCannotParseVersionLine FilePath Text
+    deriving (Show, Typeable, Exception)
+
+makeStandardLibraryOracle :: FilePath -> Rules ()
+makeStandardLibraryOracle libraryRoot = do
+  addOracle $ \AgdaStandardLibraryQuery{} -> do
+    standardLibraryVersion <- getStandardLibraryVersionIO libraryRoot
+    putInfo $ "Using Agda standard library version " <> Text.unpack standardLibraryVersion
+    let includePaths = ["src"]
+    let canonicalBaseUrl = makeStandardLibraryCanonicalBaseUrl standardLibraryVersion
+    return Library {..}
+  return ()
+
+getStandardLibrary :: Action Library
+getStandardLibrary = askOracle $ AgdaStandardLibraryQuery ()
+
+getStandardLibraryIO :: MonadIO m => FilePath -> m Library
+getStandardLibraryIO libraryRoot = do
   let includePaths = ["src"]
-  canonicalBaseUrl <- getStandardLibraryCanonicalBaseUrl libraryRoot
+  standardLibraryVersion <- getStandardLibraryVersionIO libraryRoot
+  let canonicalBaseUrl = makeStandardLibraryCanonicalBaseUrl standardLibraryVersion
   return Library {..}
 
 -- | Get a URL to the standard library documentation.
-getStandardLibraryCanonicalBaseUrl :: MonadIO m => FilePath -> m Text
-getStandardLibraryCanonicalBaseUrl dir = do
-  ver <- getStandardLibraryVersion dir
-  return $ "https://agda.github.io/agda-stdlib/" <> ver
-
-
-newtype AgdaException = AgdaStandardLibraryNotFound { changelogPath :: FilePath }
-    deriving (Show, Typeable)
-
-instance Exception AgdaException
+makeStandardLibraryCanonicalBaseUrl :: Text -> Text
+makeStandardLibraryCanonicalBaseUrl standardLibraryVersion =
+  "https://agda.github.io/agda-stdlib/" <> standardLibraryVersion
 
 
 -- | Get the standard library version.
-getStandardLibraryVersion :: MonadIO m => FilePath -> m Text
-getStandardLibraryVersion dir = liftIO $ do
+getStandardLibraryVersionIO :: MonadIO m => FilePath -> m Text
+getStandardLibraryVersionIO dir = liftIO $ do
   --
   -- NOTE: Version detection depends on the fact that the standard library
   --       maintains a CHANGELOG.md file which always opens with its version.
@@ -244,11 +270,10 @@ getStandardLibraryVersion dir = liftIO $ do
     then throwIO $ AgdaStandardLibraryNotFound changelog
     else do
       changelogContents <- Text.readFile changelog
-      let verLine = head (Text.lines changelogContents)
-      ver <-
-        maybe (fail $ "Cannot read version from " <> changelog) return $
-          Text.stripPrefix "Version " verLine
-      return $ "v" <> Text.strip ver
+      let versionLine = head (Text.lines changelogContents)
+      case Text.stripPrefix "Version " versionLine of
+        Nothing -> throwIO $ AgdaStandardLibraryCannotParseVersionLine changelog versionLine
+        Just standardLibraryVersion -> return $ "v" <> Text.strip standardLibraryVersion
 
 --------------------------------------------------------------------------------
 -- Guess to which file Agda writes HTML and LaTeX output
