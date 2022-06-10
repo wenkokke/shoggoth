@@ -70,7 +70,7 @@ makeVersionOracle = do
 #if installAgda
 getVersionAction :: Action Text
 getVersionAction = do
-  putInfo $ "Using Agda version " <> agdaVersion
+  putInfo $ "Using Agda version " <> Agda.version
   return $ Text.pack Agda.version
 #else
 getVersionAction :: Action Text
