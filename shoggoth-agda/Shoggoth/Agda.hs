@@ -415,7 +415,7 @@ newtype AgdaSoup a = AgdaSoup (State.State AgdaSoupState a)
 qualifyName :: Library -> ModuleName -> Text -> Text
 qualifyName Library {libraryName} moduleName name
   | Text.null name = name
-  | otherwise = libraryName <> ":" <> moduleName <> "." <> name
+  | otherwise = libraryName <> "-" <> Text.replace "." "-" moduleName <> "-" <> name
 
 qualifyIdSoup :: AgdaFileInfo -> Tag Text -> AgdaSoup (Tag Text)
 qualifyIdSoup AgdaFileInfo {library, moduleName} = mapIdSoup (qualifyName library moduleName)
