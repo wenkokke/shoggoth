@@ -189,12 +189,11 @@ latexArgs outDir = ["--latex", "--latex-dir=" <> outDir]
 
 makeAgdaLinkFixer ::
   (?routingTable :: RoutingTable) =>
-  (Text -> Text) ->
   Maybe Library ->
   [Library] ->
   [Library] ->
   Action (Url -> Url)
-makeAgdaLinkFixer qualifyId standardLibrary localLibraries otherLibraries = do
+makeAgdaLinkFixer standardLibrary localLibraries otherLibraries = do
   let maybeBuiltinLinkFixer = makeBuiltinLinkFixer <$> standardLibrary
   maybeStandardLibraryLinkFixer <- traverse makeLibraryLinkFixer standardLibrary
   localLinkFixers <- traverse makeLocalLinkFixer localLibraries
