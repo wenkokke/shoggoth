@@ -160,14 +160,15 @@ latexArgs outDir = ["--latex", "--latex-dir=" <> outDir]
 
 makeAgdaLinkFixer ::
   (?routingTable :: RoutingTable) =>
+  (Text -> Text) ->
   Maybe Library ->
   [Library] ->
   [Library] ->
   Action (Url -> Url)
-makeAgdaLinkFixer standardLibrary localLibraries otherLibraries = do
+makeAgdaLinkFixer qualifyId standardLibrary localLibraries otherLibraries = do
   let maybeBuiltinLinkFixer = makeBuiltinLinkFixer <$> standardLibrary
   maybeStandardLibraryLinkFixer <- traverse makeLibraryLinkFixer standardLibrary
-  localLinkFixers <- traverse makeLocalLinkFixer localLibraries
+  localLinkFixers <- traverse (makeLocalLinkFixer qualifyId) localLibraries
   otherLinkFixers <- traverse makeLibraryLinkFixer otherLibraries
   let linkFixers =
         [ maybeToList maybeBuiltinLinkFixer,
@@ -184,9 +185,10 @@ makeAgdaLinkFixer standardLibrary localLibraries otherLibraries = do
 -- | Create a function to fix URL references to local modules
 makeLocalLinkFixer ::
   (?routingTable :: RoutingTable) =>
+  (Text -> Text) ->
   Library ->
   Action (Url -> Url)
-makeLocalLinkFixer lib@Library {..} = do
+makeLocalLinkFixer qualifyId lib@Library {..} = do
   files <- getAgdaFilesInLibrary lib
 
   moduleRoutes <- forM files $ \(includePath, file) -> do
@@ -200,7 +202,7 @@ makeLocalLinkFixer lib@Library {..} = do
     let (oldUrl, anchor) = Text.breakOn "#" url
     let moduleName = Text.replace ".html" "" oldUrl
     newUrl <- Map.lookup moduleName moduleRoutingTable
-    return $ newUrl <> anchor
+    return $ newUrl <> qualifyId anchor
 
 --------------------------------------------------------------------------------
 -- Fix references to an external library with a canonical URL
