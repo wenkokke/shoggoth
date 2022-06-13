@@ -60,14 +60,17 @@ import Control.Monad.Trans.State.Strict qualified as State
     evalState,
     get,
     put,
+    modify
   )
 import Shoggoth.TagSoup
   ( Attribute,
-    Tag (TagOpen),
+    Tag (TagOpen, TagPosition),
     isTagCloseName,
     isTagOpenName,
     parseTags,
     renderTags,
+    Row,
+    Column
   )
 
 -- Agda version oracle
@@ -384,18 +387,46 @@ inDirectory file dir =
 -- Fix Agda IDs using TagSoup
 --------------------------------------------------------------------------------
 
-newtype AgdaSoup a = AgdaSoup (State.State Bool a)
+data AgdaSoupState = AgdaSoupState
+  { openPreTags :: [Tag Text],
+    tagPosition :: (Row, Column)
+  }
+
+emptyAgdaSoupState :: AgdaSoupState
+emptyAgdaSoupState = AgdaSoupState
+  { openPreTags = [],
+    tagPosition = (0, 0)
+  }
+
+openPreTag :: Tag Text -> AgdaSoupState -> AgdaSoupState
+openPreTag preTagOpen st@AgdaSoupState {openPreTags} = st {openPreTags = preTagOpen : openPreTags}
+
+closePreTag :: Tag Text -> AgdaSoupState -> AgdaSoupState
+closePreTag _preTagClose st@AgdaSoupState {openPreTags, tagPosition} =
+  case openPreTags of
+    [] -> throw $ uncurry ExtraPreClose tagPosition
+    (_firstPreTag : otherPreTags) -> st {openPreTags = otherPreTags}
+
+newtype AgdaSoup a = AgdaSoup (State.State AgdaSoupState a)
   deriving newtype (Functor, Applicative, Monad)
 
 runAgdaSoup :: AgdaSoup a -> a
-runAgdaSoup (AgdaSoup m) = State.evalState m False
+runAgdaSoup (AgdaSoup m) = State.evalState m emptyAgdaSoupState
 
 mapAgdaId :: (Text -> Text) -> Tag Text -> AgdaSoup (Tag Text)
-mapAgdaId f tag = AgdaSoup $ do
-  when (isPreOpen tag && hasAgdaClass tag) enter
-  when (isPreClose tag) leave
-  inPre <- State.get
-  return (if inPre then mapId f tag else tag)
+mapAgdaId f tag@(TagPosition r c) = AgdaSoup $ do
+    State.modify (\st -> st { tagPosition = (r, c) })
+    return tag
+mapAgdaId f tag
+  | isPreOpen tag = AgdaSoup $ do
+    State.modify (openPreTag tag)
+    return tag
+  | isPreClose tag = AgdaSoup $ do
+    State.modify (closePreTag tag)
+    return tag
+  | otherwise = AgdaSoup $ do
+    cond <- inAgdaPre
+    return $ if cond then mapId f tag else tag
 
 mapId :: (Text -> Text) -> Tag Text -> Tag Text
 mapId f (TagOpen name attrs) =
@@ -420,24 +451,15 @@ hasAgdaClass = hasAttribute ("class", "agda")
     hasAttribute _ _ = False
 
 data AgdaSoupException
-  = NestedPreOpen
-  | ExtraPreClose
+  = ExtraPreClose !Row !Column
   deriving (Show)
   deriving anyclass (Exception)
 
-enter :: State.State Bool ()
-enter = do
-  code <- State.get
-  if code
-    then throw NestedPreOpen
-    else State.put True
+inAgdaPre :: State.State AgdaSoupState Bool
+inAgdaPre = do
+  st@AgdaSoupState {openPreTags} <- State.get
+  return (any hasAgdaClass openPreTags)
 
-leave :: State.State Bool ()
-leave = do
-  code <- State.get
-  if code
-    then State.put False
-    else throw ExtraPreClose
 
 --------------------------------------------------------------------------------
 -- Helper functions to get files in an Agda library

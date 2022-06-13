@@ -30,6 +30,7 @@ common language-haskell
     LambdaCase
     MultiParamTypeClasses
     MultiWayIf
+    NamedFieldPuns
     OverloadedStrings
     PatternSynonyms
     RecordWildCards
