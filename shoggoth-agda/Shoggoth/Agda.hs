@@ -334,8 +334,8 @@ resolveFileInfo libs src = fromCandidates (resolveFileInfoForLibraries libs)
               | src `inDirectory` fullIncludePath =
                 let modulePath         = makeRelative fullIncludePath src
                     moduleName         = modulePathToName modulePath
-                    outputFileForLaTex = Text.unpack moduleName <.> "md"
-                    outputFileForHtml  = replaceExtensions modulePath "tex"
+                    outputFileForHtml  = Text.unpack moduleName <.> "md"
+                    outputFileForLaTex = replaceExtensions modulePath "tex"
                  in return (AgdaFileInfo lib includePath modulePath moduleName outputFileForLaTex outputFileForHtml)
               | otherwise = mzero
               where
