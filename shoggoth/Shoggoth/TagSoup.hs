@@ -1,6 +1,7 @@
 module Shoggoth.TagSoup
   ( stripTags,
     withUrls,
+    mapUrls,
     addDefaultTableHeaderScope,
     removeFootnoteAnchorId,
     removeSelfClosingCloseTags,
@@ -15,7 +16,42 @@ import Data.Text (Text)
 import Data.Text qualified as Text
 import Shoggoth.Prelude (Url)
 import Shoggoth.Prelude.Url qualified as Url
-import Text.HTML.TagSoup qualified as TagSoup
+import Text.HTML.TagSoup as TagSoup
+  ( Attribute,
+    Column,
+    ParseOptions (..),
+    RenderOptions (..),
+    Row,
+    Tag (..),
+    TagRep (..),
+    canonicalizeTags,
+    escapeHTML,
+    fromAttrib,
+    fromTagText,
+    innerText,
+    isTagClose,
+    isTagCloseName,
+    isTagComment,
+    isTagOpen,
+    isTagOpenName,
+    isTagPosition,
+    isTagText,
+    isTagWarning,
+    maybeTagText,
+    maybeTagWarning,
+    parseOptions,
+    parseOptionsEntities,
+    parseOptionsFast,
+    parseTags,
+    parseTagsOptions,
+    partitions,
+    renderOptions,
+    renderTags,
+    renderTagsOptions,
+    sections,
+    (~/=),
+    (~==),
+  )
 
 -- Strip HTML.
 stripTags :: Text -> Text
@@ -29,6 +65,14 @@ stripTags = mconcat . mapMaybe tag . TagSoup.parseTags
 --   Adapted from hakyll's 'Hakyll.Web.Html.withUrls'
 withUrls :: (Url -> Url) -> Text -> Text
 withUrls f = TagSoup.renderTags . map tag . TagSoup.parseTags
+  where
+    tag (TagSoup.TagOpen s a) = TagSoup.TagOpen s $ map attr a
+    tag x = x
+    attr (k, v) = (k, if k `elem` refs then f v else v)
+    refs = ["src", "href", "xlink:href"]
+
+mapUrls :: (Url -> Url) -> TagSoup.Tag Text -> TagSoup.Tag Text
+mapUrls f = tag
   where
     tag (TagSoup.TagOpen s a) = TagSoup.TagOpen s $ map attr a
     tag x = x
