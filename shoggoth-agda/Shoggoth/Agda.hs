@@ -9,7 +9,8 @@ module Shoggoth.Agda
     makeLibraryLinkFixer,
     makeBuiltinLinkFixer,
     getStandardLibraryIO,
-    resolveLibraryAndOutputFileName,
+    AgdaFileInfo (..),
+    resolveFileInfo,
     isAgdaFile,
     AgdaException (..),
     makeVersionOracle,
@@ -292,14 +293,21 @@ getStandardLibraryVersionIO dir = liftIO $ do
 -- Guess to which file Agda writes HTML and LaTeX output
 --------------------------------------------------------------------------------
 
--- | Guess the path to which Agda writes the relevant output file.
-resolveLibraryAndOutputFileName :: MonadError String m => Format -> [Library] -> FilePath -> m (Library, FilePath, FilePath, ModuleName)
-resolveLibraryAndOutputFileName format libs inputFile = do
-  (lib, includePath, modulePath, moduleName) <- resolveModulePath libs inputFile
-  let out = case format of
-        Html -> Text.unpack moduleName <.> "md"
-        LaTeX -> replaceExtensions modulePath "tex"
-  return (lib, includePath, out, moduleName)
+data AgdaFileInfo = AgdaFileInfo
+  { -- | The Agda library to which this file belongs.
+    library :: Library,
+    -- | The include path used within the library.
+    libraryIncludePath :: FilePath,
+    -- | The module path used within that include path.
+    modulePath :: FilePath,
+    -- | The Agda module name.
+    moduleName :: ModuleName,
+    -- | The output filename for LaTeX.
+    outputFileForLaTeX :: FilePath,
+    -- | The output filename for Html.
+    outputFileForHtml :: FilePath
+  }
+  deriving (Show, Typeable, Eq, Generic, Hashable, Binary, NFData)
 
 -- | Convert a filepath to a module name.
 modulePathToName :: FilePath -> Text
@@ -308,30 +316,32 @@ modulePathToName path = Text.map sepToDot (Text.pack $ dropExtensions path)
     sepToDot c = if isPathSeparator c then '.' else c
 
 -- | Guess the module path based on the filename and the library.
-resolveModulePath :: MonadError String m => [Library] -> FilePath -> m (Library, FilePath, FilePath, ModuleName)
-resolveModulePath libs src = fromCandidates (resolveModuleForLibraries libs)
+resolveFileInfo :: MonadError String m => [Library] -> FilePath -> m AgdaFileInfo
+resolveFileInfo libs src = fromCandidates (resolveFileInfoForLibraries libs)
   where
-    resolveModuleForLibraries :: MonadPlus m => [Library] -> m (Library, FilePath, FilePath, ModuleName)
-    resolveModuleForLibraries libs =
-      msum [resolveModuleForLibrary lib | lib <- libs]
+    resolveFileInfoForLibraries :: MonadPlus m => [Library] -> m AgdaFileInfo
+    resolveFileInfoForLibraries libs =
+      msum [resolveFileInfoForLibrary lib | lib <- libs]
       where
-        resolveModuleForLibrary :: MonadPlus m => Library -> m (Library, FilePath, FilePath, ModuleName)
-        resolveModuleForLibrary lib =
-          msum [resolveModuleForIncludePath (libraryRoot lib) includePath | includePath <- includePaths lib]
+        resolveFileInfoForLibrary :: MonadPlus m => Library -> m AgdaFileInfo
+        resolveFileInfoForLibrary lib =
+          msum [resolveFileInfoForIncludePath (libraryRoot lib) includePath | includePath <- includePaths lib]
           where
-            resolveModuleForIncludePath :: MonadPlus m => FilePath -> FilePath -> m (Library, FilePath, FilePath, ModuleName)
-            resolveModuleForIncludePath libraryRoot includePath
+            resolveFileInfoForIncludePath :: MonadPlus m => FilePath -> FilePath -> m AgdaFileInfo
+            resolveFileInfoForIncludePath libraryRoot includePath
               | src `inDirectory` fullIncludePath =
-                let modulePath = makeRelative fullIncludePath src
-                    moduleName = modulePathToName modulePath
-                 in return (lib, includePath, modulePath, moduleName)
+                let modulePath         = makeRelative fullIncludePath src
+                    moduleName         = modulePathToName modulePath
+                    outputFileForLaTex = Text.unpack moduleName <.> "md"
+                    outputFileForHtml  = replaceExtensions modulePath "tex"
+                 in return (AgdaFileInfo lib includePath modulePath moduleName outputFileForLaTex outputFileForHtml)
               | otherwise = mzero
               where
                 fullIncludePath = normaliseEx (libraryRoot </> includePath)
 
     fromCandidates :: (MonadError String m, Show a) => [a] -> m a
     fromCandidates [] = throwError $ "Could not find candidate for " <> src
-    fromCandidates [modulePath] = return modulePath
+    fromCandidates [fileInfo] = return fileInfo
     fromCandidates candidates = throwError $ "Multiple candidates for " <> src <> ": " <> show candidates
 
 -- | Check whether the first argument is contained within the second argument.
