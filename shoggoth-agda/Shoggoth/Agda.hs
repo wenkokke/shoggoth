@@ -226,10 +226,11 @@ makeLocalLinkFixer library@Library {..} = do
   let moduleRoutingTable = Map.fromList moduleRoutes
 
   return $ \url -> fromMaybe url $ do
-    let (oldUrl, anchor) = Text.breakOn "#" url
+    let (oldUrl, hashAndAnchor) = Text.breakOn "#" url
+    let anchor = Text.dropWhile (=='#') hashAndAnchor
     let moduleName = Text.replace ".html" "" oldUrl
     newUrl <- Map.lookup moduleName moduleRoutingTable
-    return $ newUrl <> qualifyName library moduleName anchor
+    return $ newUrl <> "#" <> qualifyName library moduleName anchor
 
 --------------------------------------------------------------------------------
 -- Fix references to an external library with a canonical URL
@@ -417,7 +418,9 @@ newtype AgdaSoup a = AgdaSoup (State.State AgdaSoupState a)
   deriving newtype (Functor, Applicative, Monad)
 
 qualifyName :: Library -> ModuleName -> Text -> Text
-qualifyName Library{libraryName} moduleName name = libraryName <> ":" <> moduleName <> "." <> name
+qualifyName Library{libraryName} moduleName name
+  | Text.null name = name
+  | otherwise = libraryName <> ":" <> moduleName <> "." <> name
 
 qualifyIdSoup :: AgdaFileInfo -> Tag Text -> AgdaSoup (Tag Text)
 qualifyIdSoup AgdaFileInfo{library, moduleName} = mapIdSoup (qualifyName library moduleName)
