@@ -29,13 +29,22 @@ jobs:
         with:
           ghc-version: ${{ matrix.ghc }}
           cabal-version: ${{ matrix.cabal }}
-
-      - name: Freeze
+          
+      - name: Cabal freeze
         run: |
           cabal v2-update
-          cabal v2-freeze
+          cabal v2-freeze --enable-tests --enable-benchmarks
+          
+      - name: Cache ~/.cabal/store and dist-newstyle
+        uses: actions/cache@v2
+        with:
+          path: |
+            ${{ steps.setup-haskell.outputs.cabal-store }}
+            dist-newstyle
+          key: ${{ matrix.os }}-GHC-${{ matrix.ghc }}-${{ hashFiles('cabal.project.ci.freeze') }}
+          restore-keys: ${{ matrix.os }}-GHC-${{ matrix.ghc }}-
 
-      - name: Build
+      - name: Cabal build
         run: |
           cabal v2-build
 
