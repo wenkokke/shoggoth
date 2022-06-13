@@ -17,7 +17,11 @@ module Shoggoth.Agda
     getVersion,
     AgdaStandardLibraryException (..),
     makeStandardLibraryOracle,
-    getStandardLibrary
+    getStandardLibrary,
+    AgdaSoup,
+    runAgdaSoup,
+    mapAgdaId,
+    AgdaSoupException (..)
   )
 where
 
@@ -49,17 +53,35 @@ import Shoggoth.Configuration (getCacheDirectory)
 import Shoggoth.Prelude
 import Shoggoth.Routing
 import System.Directory qualified as System (doesFileExist)
+import Control.Exception (Exception, throw)
+import Control.Monad (when)
+import Control.Monad.Trans.State.Strict qualified as State
+  ( State,
+    evalState,
+    get,
+    put,
+  )
+import Shoggoth.TagSoup
+  ( Attribute,
+    Tag (TagOpen),
+    isTagCloseName,
+    isTagOpenName,
+    parseTags,
+    renderTags,
+  )
 
 -- Agda version oracle
 
 newtype AgdaVersionQuery = AgdaVersionQuery ()
-  deriving (Show, Typeable, Eq, Generic, Hashable, Binary, NFData)
+  deriving (Show, Typeable, Eq, Generic)
+  deriving anyclass (Hashable, Binary, NFData)
 
 type instance RuleResult AgdaVersionQuery = Text
 
 data AgdaException
     = AgdaCannotParseVersionLine Text
-    deriving (Show, Typeable, Exception)
+    deriving (Show, Typeable)
+    deriving anyclass (Exception)
 
 makeVersionOracle :: Rules ()
 makeVersionOracle = do
@@ -119,7 +141,8 @@ type ModuleName = Text
 data Format
   = Html
   | LaTeX
-  deriving (Show, Typeable, Eq, Generic, Hashable, Binary, NFData)
+  deriving (Show, Typeable, Eq, Generic)
+  deriving anyclass (Hashable, Binary, NFData)
 
 data Library = Library
   { -- | The directory which contains the .agda-lib file.
@@ -129,7 +152,8 @@ data Library = Library
     -- | A canonical URL to which to redirect links.
     canonicalBaseUrl :: Url
   }
-  deriving (Show, Typeable, Eq, Generic, Hashable, Binary, NFData)
+  deriving (Show, Typeable, Eq, Generic)
+  deriving anyclass (Hashable, Binary, NFData)
 
 fullIncludePaths :: Library -> [FilePath]
 fullIncludePaths lib@Library {..} = [normaliseEx (libraryRoot </> includePath) | includePath <- includePaths]
@@ -238,14 +262,16 @@ reAgdaBuiltinLink = RE.regex [] "(Agda\\.[A-Za-z\\.]+)\\.html(#[^\"^']+)?"
 --------------------------------------------------------------------------------
 
 newtype AgdaStandardLibraryQuery = AgdaStandardLibraryQuery ()
-  deriving (Show, Typeable, Eq, Generic, Hashable, Binary, NFData)
+  deriving (Show, Typeable, Eq, Generic)
+  deriving anyclass (Hashable, Binary, NFData)
 
 type instance RuleResult AgdaStandardLibraryQuery = Library
 
 data AgdaStandardLibraryException
     = AgdaStandardLibraryNotFound FilePath
     | AgdaStandardLibraryCannotParseVersionLine FilePath Text
-    deriving (Show, Typeable, Exception)
+    deriving (Show, Typeable)
+    deriving anyclass (Exception)
 
 makeStandardLibraryOracle :: FilePath -> Rules ()
 makeStandardLibraryOracle libraryRoot = do
@@ -309,7 +335,8 @@ data AgdaFileInfo = AgdaFileInfo
     -- | The output filename for Html.
     outputFileForHtml :: FilePath
   }
-  deriving (Show, Typeable, Eq, Generic, Hashable, Binary, NFData)
+  deriving (Show, Typeable, Eq, Generic)
+  deriving anyclass (Hashable, Binary, NFData)
 
 -- | Convert a filepath to a module name.
 modulePathToName :: FilePath -> Text
@@ -351,6 +378,66 @@ resolveFileInfo libs src = fromCandidates (resolveFileInfoForLibraries libs)
 inDirectory :: FilePath -> FilePath -> Bool
 inDirectory file dir =
   splitDirectories (normaliseEx dir) `List.isPrefixOf` splitDirectories (normaliseEx file)
+
+
+--------------------------------------------------------------------------------
+-- Fix Agda IDs using TagSoup
+--------------------------------------------------------------------------------
+
+newtype AgdaSoup a = AgdaSoup (State.State Bool a)
+  deriving newtype (Functor, Applicative, Monad)
+
+runAgdaSoup :: AgdaSoup a -> a
+runAgdaSoup (AgdaSoup m) = State.evalState m False
+
+mapAgdaId :: (Text -> Text) -> Tag Text -> AgdaSoup (Tag Text)
+mapAgdaId f tag = AgdaSoup $ do
+  when (isPreOpen tag && hasAgdaClass tag) enter
+  when (isPreClose tag) leave
+  inPre <- State.get
+  return (if inPre then mapId f tag else tag)
+
+mapId :: (Text -> Text) -> Tag Text -> Tag Text
+mapId f (TagOpen name attrs) =
+  TagOpen
+    name
+    [ if key == "id" then (key, f value) else attr
+      | attr@(key, value) <- attrs
+    ]
+mapId f tag = tag
+
+isPreOpen :: Tag Text -> Bool
+isPreOpen = isTagOpenName "pre"
+
+isPreClose :: Tag Text -> Bool
+isPreClose = isTagCloseName "pre"
+
+hasAgdaClass :: Tag Text -> Bool
+hasAgdaClass = hasAttribute ("class", "agda")
+  where
+    hasAttribute :: Attribute Text -> Tag Text -> Bool
+    hasAttribute attr (TagOpen tag attrs) = attr `elem` attrs
+    hasAttribute _ _ = False
+
+data AgdaSoupException
+  = NestedPreOpen
+  | ExtraPreClose
+  deriving (Show)
+  deriving anyclass (Exception)
+
+enter :: State.State Bool ()
+enter = do
+  code <- State.get
+  if code
+    then throw NestedPreOpen
+    else State.put True
+
+leave :: State.State Bool ()
+leave = do
+  code <- State.get
+  if code
+    then State.put False
+    else throw ExtraPreClose
 
 --------------------------------------------------------------------------------
 -- Helper functions to get files in an Agda library

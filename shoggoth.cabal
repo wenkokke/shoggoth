@@ -38,6 +38,8 @@ common language-haskell
     TypeApplications
     TypeFamilies
     TypeSynonymInstances
+    GeneralizedNewtypeDeriving
+    DerivingStrategies
 
 library
   import:          language-haskell
