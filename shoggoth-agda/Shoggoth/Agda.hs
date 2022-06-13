@@ -118,7 +118,7 @@ type ModuleName = Text
 data Format
   = Html
   | LaTeX
-  deriving (Show, Typeable, Eq)
+  deriving (Show, Typeable, Eq, Generic, Hashable, Binary, NFData)
 
 data Library = Library
   { -- | The directory which contains the .agda-lib file.
