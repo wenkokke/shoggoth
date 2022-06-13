@@ -10,6 +10,7 @@ module Shoggoth.Agda
     makeBuiltinLinkFixer,
     getStandardLibraryIO,
     AgdaFileInfo (..),
+    ModuleName,
     resolveFileInfo,
     isAgdaFile,
     AgdaException (..),
@@ -20,7 +21,7 @@ module Shoggoth.Agda
     getStandardLibrary,
     AgdaSoup,
     runAgdaSoup,
-    mapAgdaId,
+    qualifyIdSoup,
     AgdaSoupException (..)
   )
 where
@@ -148,7 +149,8 @@ data Format
   deriving anyclass (Hashable, Binary, NFData)
 
 data Library = Library
-  { -- | The directory which contains the .agda-lib file.
+  { libraryName :: Text,
+    -- | The directory which contains the .agda-lib file.
     libraryRoot :: FilePath,
     -- | A series of paths in which to search for library files, relative to the directory in which the library file resides.
     includePaths :: [FilePath],
@@ -195,7 +197,7 @@ makeAgdaLinkFixer ::
 makeAgdaLinkFixer qualifyId standardLibrary localLibraries otherLibraries = do
   let maybeBuiltinLinkFixer = makeBuiltinLinkFixer <$> standardLibrary
   maybeStandardLibraryLinkFixer <- traverse makeLibraryLinkFixer standardLibrary
-  localLinkFixers <- traverse (makeLocalLinkFixer qualifyId) localLibraries
+  localLinkFixers <- traverse makeLocalLinkFixer localLibraries
   otherLinkFixers <- traverse makeLibraryLinkFixer otherLibraries
   let linkFixers =
         [ maybeToList maybeBuiltinLinkFixer,
@@ -212,11 +214,10 @@ makeAgdaLinkFixer qualifyId standardLibrary localLibraries otherLibraries = do
 -- | Create a function to fix URL references to local modules
 makeLocalLinkFixer ::
   (?routingTable :: RoutingTable) =>
-  (Text -> Text) ->
   Library ->
   Action (Url -> Url)
-makeLocalLinkFixer qualifyId lib@Library {..} = do
-  files <- getAgdaFilesInLibrary lib
+makeLocalLinkFixer library@Library {..} = do
+  files <- getAgdaFilesInLibrary library
 
   moduleRoutes <- forM files $ \(includePath, file) -> do
     let src = libraryRoot </> includePath </> file
@@ -229,7 +230,7 @@ makeLocalLinkFixer qualifyId lib@Library {..} = do
     let (oldUrl, anchor) = Text.breakOn "#" url
     let moduleName = Text.replace ".html" "" oldUrl
     newUrl <- Map.lookup moduleName moduleRoutingTable
-    return $ newUrl <> qualifyId anchor
+    return $ newUrl <> qualifyName library moduleName anchor
 
 --------------------------------------------------------------------------------
 -- Fix references to an external library with a canonical URL
@@ -283,7 +284,7 @@ makeStandardLibraryOracle libraryRoot = do
     putInfo $ "Using Agda standard library version " <> Text.unpack standardLibraryVersion
     let includePaths = ["src"]
     let canonicalBaseUrl = makeStandardLibraryCanonicalBaseUrl standardLibraryVersion
-    return Library {..}
+    return Library {libraryName = "standard-library", ..}
   return ()
 
 getStandardLibrary :: Action Library
@@ -294,7 +295,7 @@ getStandardLibraryIO libraryRoot = do
   let includePaths = ["src"]
   standardLibraryVersion <- getStandardLibraryVersionIO libraryRoot
   let canonicalBaseUrl = makeStandardLibraryCanonicalBaseUrl standardLibraryVersion
-  return Library {..}
+  return Library {libraryName = "standard-library", ..}
 
 -- | Get a URL to the standard library documentation.
 makeStandardLibraryCanonicalBaseUrl :: Text -> Text
@@ -416,14 +417,20 @@ data AgdaSoupException
 newtype AgdaSoup a = AgdaSoup (State.State AgdaSoupState a)
   deriving newtype (Functor, Applicative, Monad)
 
+qualifyName :: Library -> ModuleName -> Text -> Text
+qualifyName Library{libraryName} moduleName name = libraryName <> ":" <> moduleName <> "." <> name
+
+qualifyIdSoup :: AgdaFileInfo -> Tag Text -> AgdaSoup (Tag Text)
+qualifyIdSoup AgdaFileInfo{library, moduleName} = mapIdSoup (qualifyName library moduleName)
+
 runAgdaSoup :: AgdaSoup a -> a
 runAgdaSoup (AgdaSoup m) = State.evalState m emptyAgdaSoupState
 
-mapAgdaId :: (Text -> Text) -> Tag Text -> AgdaSoup (Tag Text)
-mapAgdaId f tag@(TagPosition r c) = AgdaSoup $ do
+mapIdSoup :: (Text -> Text) -> Tag Text -> AgdaSoup (Tag Text)
+mapIdSoup f tag@(TagPosition r c) = AgdaSoup $ do
     State.modify (\st -> st { tagPosition = (r, c) })
     return tag
-mapAgdaId f tag
+mapIdSoup f tag
   | isPreOpen tag = AgdaSoup $ do
     State.modify (openPreTag tag)
     return tag
@@ -432,16 +439,16 @@ mapAgdaId f tag
     return tag
   | otherwise = AgdaSoup $ do
     cond <- inAgdaPre
-    return $ if cond then mapId f tag else tag
+    return $ if cond then mapIdTag f tag else tag
 
-mapId :: (Text -> Text) -> Tag Text -> Tag Text
-mapId f (TagOpen name attrs) =
+mapIdTag :: (Text -> Text) -> Tag Text -> Tag Text
+mapIdTag f (TagOpen name attrs) =
   TagOpen
     name
     [ if key == "id" then (key, f value) else attr
       | attr@(key, value) <- attrs
     ]
-mapId f tag = tag
+mapIdTag f tag = tag
 
 hasAgdaClass :: Tag Text -> Bool
 hasAgdaClass = hasAttribute ("class", "Agda")
