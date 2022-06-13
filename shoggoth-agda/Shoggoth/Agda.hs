@@ -22,7 +22,7 @@ module Shoggoth.Agda
     AgdaSoup,
     runAgdaSoup,
     qualifyIdSoup,
-    AgdaSoupException (..)
+    AgdaSoupException (..),
   )
 where
 
@@ -34,10 +34,17 @@ import System.Environment (withArgs, withProgName)
 import System.Exit (ExitCode (..))
 #endif
 
-import Control.Exception (Exception, throwIO)
-import Control.Monad (MonadPlus (mzero), forM, join, msum)
+import Control.Exception (Exception, throw, throwIO)
+import Control.Monad (MonadPlus (mzero), forM, join, msum, when)
 import Control.Monad.Except (MonadError (throwError))
 import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.Trans.State.Strict qualified as State
+  ( State,
+    evalState,
+    get,
+    modify,
+    put,
+  )
 import Data.List qualified as List
 import Data.Map (Map)
 import Data.Map qualified as Map
@@ -53,26 +60,17 @@ import GHC.Generics (Generic)
 import Shoggoth.Configuration (getCacheDirectory)
 import Shoggoth.Prelude
 import Shoggoth.Routing
-import System.Directory qualified as System (doesFileExist)
-import Control.Exception (Exception, throw)
-import Control.Monad (when)
-import Control.Monad.Trans.State.Strict qualified as State
-  ( State,
-    evalState,
-    get,
-    put,
-    modify
-  )
 import Shoggoth.TagSoup
   ( Attribute,
+    Column,
+    Row,
     Tag (TagOpen, TagPosition),
     isTagCloseName,
     isTagOpenName,
     parseTags,
     renderTags,
-    Row,
-    Column
   )
+import System.Directory qualified as System (doesFileExist)
 
 -- Agda version oracle
 
@@ -82,17 +80,15 @@ newtype AgdaVersionQuery = AgdaVersionQuery ()
 
 type instance RuleResult AgdaVersionQuery = Text
 
-data AgdaException
-    = AgdaCannotParseVersionLine Text
-    deriving (Show, Typeable)
-    deriving anyclass (Exception)
+newtype AgdaException
+  = AgdaCannotParseVersionLine Text
+  deriving (Show, Typeable)
+  deriving anyclass (Exception)
 
 makeVersionOracle :: Rules ()
 makeVersionOracle = do
-  addOracle $ \AgdaVersionQuery{} -> getVersionAction
+  addOracle $ \AgdaVersionQuery {} -> getVersionAction
   return ()
-
-
 
 #if installAgda
 getVersionAction :: Action Text
@@ -137,7 +133,7 @@ runAgdaWith args =
     handleExitSuccess exitCode    = throwIO exitCode
 #else
 runAgdaWith :: [String] -> Action ()
-runAgdaWith args = command_ [] "agda" args
+runAgdaWith = command_ [] "agda"
 #endif
 
 type ModuleName = Text
@@ -227,7 +223,7 @@ makeLocalLinkFixer library@Library {..} = do
 
   return $ \url -> fromMaybe url $ do
     let (oldUrl, hashAndAnchor) = Text.breakOn "#" url
-    let anchor = Text.dropWhile (=='#') hashAndAnchor
+    let anchor = Text.dropWhile (== '#') hashAndAnchor
     let moduleName = Text.replace ".html" "" oldUrl
     newUrl <- Map.lookup moduleName moduleRoutingTable
     return $ newUrl <> "#" <> qualifyName library moduleName anchor
@@ -272,14 +268,14 @@ newtype AgdaStandardLibraryQuery = AgdaStandardLibraryQuery ()
 type instance RuleResult AgdaStandardLibraryQuery = Library
 
 data AgdaStandardLibraryException
-    = AgdaStandardLibraryNotFound FilePath
-    | AgdaStandardLibraryCannotParseVersionLine FilePath Text
-    deriving (Show, Typeable)
-    deriving anyclass (Exception)
+  = AgdaStandardLibraryNotFound FilePath
+  | AgdaStandardLibraryCannotParseVersionLine FilePath Text
+  deriving (Show, Typeable)
+  deriving anyclass (Exception)
 
 makeStandardLibraryOracle :: FilePath -> Rules ()
 makeStandardLibraryOracle libraryRoot = do
-  addOracle $ \AgdaStandardLibraryQuery{} -> do
+  addOracle $ \AgdaStandardLibraryQuery {} -> do
     standardLibraryVersion <- getStandardLibraryVersionIO libraryRoot
     putInfo $ "Using Agda standard library version " <> Text.unpack standardLibraryVersion
     let includePaths = ["src"]
@@ -301,7 +297,6 @@ getStandardLibraryIO libraryRoot = do
 makeStandardLibraryCanonicalBaseUrl :: Text -> Text
 makeStandardLibraryCanonicalBaseUrl standardLibraryVersion =
   "https://agda.github.io/agda-stdlib/" <> standardLibraryVersion
-
 
 -- | Get the standard library version.
 getStandardLibraryVersionIO :: MonadIO m => FilePath -> m Text
@@ -363,9 +358,9 @@ resolveFileInfo libs src = fromCandidates (resolveFileInfoForLibraries libs)
             resolveFileInfoForIncludePath :: MonadPlus m => FilePath -> FilePath -> m AgdaFileInfo
             resolveFileInfoForIncludePath libraryRoot includePath
               | src `inDirectory` fullIncludePath =
-                let modulePath         = makeRelative fullIncludePath src
-                    moduleName         = modulePathToName modulePath
-                    outputFileForHtml  = Text.unpack moduleName <.> "md"
+                let modulePath = makeRelative fullIncludePath src
+                    moduleName = modulePathToName modulePath
+                    outputFileForHtml = Text.unpack moduleName <.> "md"
                     outputFileForLaTex = replaceExtensions modulePath "tex"
                  in return (AgdaFileInfo lib includePath modulePath moduleName outputFileForLaTex outputFileForHtml)
               | otherwise = mzero
@@ -383,7 +378,6 @@ inDirectory :: FilePath -> FilePath -> Bool
 inDirectory file dir =
   splitDirectories (normaliseEx dir) `List.isPrefixOf` splitDirectories (normaliseEx file)
 
-
 --------------------------------------------------------------------------------
 -- Fix Agda IDs using TagSoup
 --------------------------------------------------------------------------------
@@ -394,10 +388,11 @@ data AgdaSoupState = AgdaSoupState
   }
 
 emptyAgdaSoupState :: AgdaSoupState
-emptyAgdaSoupState = AgdaSoupState
-  { openPreTags = [],
-    tagPosition = (0, 0)
-  }
+emptyAgdaSoupState =
+  AgdaSoupState
+    { openPreTags = [],
+      tagPosition = (0, 0)
+    }
 
 openPreTag :: Tag Text -> AgdaSoupState -> AgdaSoupState
 openPreTag preTagOpen st@AgdaSoupState {openPreTags} = do
@@ -418,20 +413,20 @@ newtype AgdaSoup a = AgdaSoup (State.State AgdaSoupState a)
   deriving newtype (Functor, Applicative, Monad)
 
 qualifyName :: Library -> ModuleName -> Text -> Text
-qualifyName Library{libraryName} moduleName name
+qualifyName Library {libraryName} moduleName name
   | Text.null name = name
   | otherwise = libraryName <> ":" <> moduleName <> "." <> name
 
 qualifyIdSoup :: AgdaFileInfo -> Tag Text -> AgdaSoup (Tag Text)
-qualifyIdSoup AgdaFileInfo{library, moduleName} = mapIdSoup (qualifyName library moduleName)
+qualifyIdSoup AgdaFileInfo {library, moduleName} = mapIdSoup (qualifyName library moduleName)
 
 runAgdaSoup :: AgdaSoup a -> a
 runAgdaSoup (AgdaSoup m) = State.evalState m emptyAgdaSoupState
 
 mapIdSoup :: (Text -> Text) -> Tag Text -> AgdaSoup (Tag Text)
 mapIdSoup f tag@(TagPosition r c) = AgdaSoup $ do
-    State.modify (\st -> st { tagPosition = (r, c) })
-    return tag
+  State.modify (\st -> st {tagPosition = (r, c)})
+  return tag
 mapIdSoup f tag
   | isPreOpen tag = AgdaSoup $ do
     State.modify (openPreTag tag)
@@ -469,7 +464,6 @@ inAgdaPre :: State.State AgdaSoupState Bool
 inAgdaPre = do
   st@AgdaSoupState {openPreTags} <- State.get
   return (any hasAgdaClass openPreTags)
-
 
 --------------------------------------------------------------------------------
 -- Helper functions to get files in an Agda library
