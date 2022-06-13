@@ -399,13 +399,19 @@ emptyAgdaSoupState = AgdaSoupState
   }
 
 openPreTag :: Tag Text -> AgdaSoupState -> AgdaSoupState
-openPreTag preTagOpen st@AgdaSoupState {openPreTags} = st {openPreTags = preTagOpen : openPreTags}
+openPreTag preTagOpen st@AgdaSoupState {openPreTags} = do
+  st {openPreTags = preTagOpen : openPreTags}
 
 closePreTag :: Tag Text -> AgdaSoupState -> AgdaSoupState
 closePreTag _preTagClose st@AgdaSoupState {openPreTags, tagPosition} =
   case openPreTags of
     [] -> throw $ uncurry ExtraPreClose tagPosition
     (_firstPreTag : otherPreTags) -> st {openPreTags = otherPreTags}
+
+data AgdaSoupException
+  = ExtraPreClose !Row !Column
+  deriving (Show)
+  deriving anyclass (Exception)
 
 newtype AgdaSoup a = AgdaSoup (State.State AgdaSoupState a)
   deriving newtype (Functor, Applicative, Monad)
@@ -437,23 +443,18 @@ mapId f (TagOpen name attrs) =
     ]
 mapId f tag = tag
 
-isPreOpen :: Tag Text -> Bool
-isPreOpen = isTagOpenName "pre"
-
-isPreClose :: Tag Text -> Bool
-isPreClose = isTagCloseName "pre"
-
 hasAgdaClass :: Tag Text -> Bool
-hasAgdaClass = hasAttribute ("class", "agda")
+hasAgdaClass = hasAttribute ("class", "Agda")
   where
     hasAttribute :: Attribute Text -> Tag Text -> Bool
     hasAttribute attr (TagOpen tag attrs) = attr `elem` attrs
     hasAttribute _ _ = False
 
-data AgdaSoupException
-  = ExtraPreClose !Row !Column
-  deriving (Show)
-  deriving anyclass (Exception)
+isPreOpen :: Tag Text -> Bool
+isPreOpen = isTagOpenName "pre"
+
+isPreClose :: Tag Text -> Bool
+isPreClose = isTagCloseName "pre"
 
 inAgdaPre :: State.State AgdaSoupState Bool
 inAgdaPre = do
