@@ -293,13 +293,13 @@ getStandardLibraryVersionIO dir = liftIO $ do
 --------------------------------------------------------------------------------
 
 -- | Guess the path to which Agda writes the relevant output file.
-resolveLibraryAndOutputFileName :: MonadError String m => Format -> [Library] -> FilePath -> m (Library, FilePath, FilePath)
+resolveLibraryAndOutputFileName :: MonadError String m => Format -> [Library] -> FilePath -> m (Library, FilePath, FilePath, ModuleName)
 resolveLibraryAndOutputFileName format libs inputFile = do
   (lib, includePath, modulePath, moduleName) <- resolveModulePath libs inputFile
   let out = case format of
         Html -> Text.unpack moduleName <.> "md"
         LaTeX -> replaceExtensions modulePath "tex"
-  return (lib, includePath, out)
+  return (lib, includePath, out, moduleName)
 
 -- | Convert a filepath to a module name.
 modulePathToName :: FilePath -> Text
