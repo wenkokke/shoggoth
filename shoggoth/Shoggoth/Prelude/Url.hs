@@ -6,7 +6,7 @@ import Shoggoth.Prelude.FilePath
   ( joinPath,
     makeRelative,
     splitDirectories,
-    takeDirectory
+    takeDirectory, normaliseEx
   )
 
 type Url = Text
@@ -22,14 +22,13 @@ removeIndexHtml = Text.replace "index.html" ""
 --   Adapted from hakyll's 'Hakyll.Web.Html.RelativizeUrls.relativizeUrls'
 relativizeUrl :: FilePath -> FilePath -> Url -> Url
 relativizeUrl outDir out url
-  | isAbsoluteUrl url = Text.pack (toRoot out) <> url
+  | isAbsoluteUrl url = Text.pack toRoot <> url
   | otherwise = url
   where
-    toRoot :: FilePath -> FilePath
-    toRoot =
-      joinPath
-        . map (const "..")
-        . filter (`notElem` [".", "/", "./"])
-        . splitDirectories
-        . takeDirectory
-        . makeRelative outDir
+    toRoot :: FilePath
+    toRoot
+      | null directories = "."
+      | otherwise = joinPath $ map (const "..") directories
+      where
+        relativeOut = normaliseEx (makeRelative outDir out)
+        directories = filter (`notElem` [".", "/", "./"]) (splitDirectories (takeDirectory out))
