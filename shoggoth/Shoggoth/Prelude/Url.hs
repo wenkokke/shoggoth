@@ -1,12 +1,14 @@
 module Shoggoth.Prelude.Url where
 
+import Data.List qualified as List
 import Data.Text (Text)
 import Data.Text qualified as Text
 import Shoggoth.Prelude.FilePath
   ( joinPath,
     makeRelative,
+    normaliseEx,
     splitDirectories,
-    takeDirectory, normaliseEx
+    takeDirectory,
   )
 
 type Url = Text
@@ -31,4 +33,7 @@ relativizeUrl outDir out url
       | otherwise = joinPath $ map (const "..") directories
       where
         relativeOut = normaliseEx (makeRelative outDir out)
-        directories = filter (`notElem` [".", "/", "./"]) (splitDirectories (takeDirectory relativeOut))
+        relativeOutDir
+          | "/" `List.isSuffixOf` relativeOut = relativeOut
+          | otherwise = takeDirectory relativeOut
+        directories = filter (`notElem` [".", "/", "./"]) (splitDirectories relativeOutDir)
