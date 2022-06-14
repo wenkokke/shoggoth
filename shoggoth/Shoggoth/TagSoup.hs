@@ -2,6 +2,8 @@ module Shoggoth.TagSoup
   ( stripTags,
     withUrls,
     mapUrls,
+    withIds,
+    mapIds,
     addDefaultTableHeaderScope,
     removeFootnoteAnchorId,
     removeSelfClosingCloseTags,
@@ -64,20 +66,26 @@ stripTags = mconcat . mapMaybe tag . TagSoup.parseTags
 --
 --   Adapted from hakyll's 'Hakyll.Web.Html.withUrls'
 withUrls :: (Url -> Url) -> Text -> Text
-withUrls f = TagSoup.renderTags . map tag . TagSoup.parseTags
-  where
-    tag (TagSoup.TagOpen s a) = TagSoup.TagOpen s $ map attr a
-    tag x = x
-    attr (k, v) = (k, if k `elem` refs then f v else v)
-    refs = ["src", "href", "xlink:href"]
+withUrls f = TagSoup.renderTags . map (mapUrls f) . TagSoup.parseTags
 
 mapUrls :: (Url -> Url) -> TagSoup.Tag Text -> TagSoup.Tag Text
-mapUrls f = tag
+mapUrls f (TagSoup.TagOpen s a) = TagSoup.TagOpen s $ map attr a
   where
-    tag (TagSoup.TagOpen s a) = TagSoup.TagOpen s $ map attr a
-    tag x = x
     attr (k, v) = (k, if k `elem` refs then f v else v)
     refs = ["src", "href", "xlink:href"]
+mapUrls f tag = tag
+
+withIds :: (Text -> Text) -> Text -> Text
+withIds f = TagSoup.renderTags . map (mapIds f) . TagSoup.parseTags
+
+mapIds :: (Text -> Text) -> TagSoup.Tag Text -> TagSoup.Tag Text
+mapIds f (TagSoup.TagOpen name attrs) =
+  TagSoup.TagOpen
+    name
+    [ if key == "id" then (key, f value) else attr
+      | attr@(key, value) <- attrs
+    ]
+mapIds f tag = tag
 
 -- | Pandoc does not include scope tags for table header elements.
 addDefaultTableHeaderScope :: Text -> Text -> Text

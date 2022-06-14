@@ -18,7 +18,7 @@ module Shoggoth.Template.Pandoc
     HighlightStyle,
     module PandocHighlighting,
     module PandocOptions,
-    module PandocUrl,
+    module PandocHelper,
     shiftHeadersBy,
   )
 where
@@ -146,7 +146,7 @@ import Shoggoth.Template.Pandoc.Citeproc as PandocCiteprocTypes
     VerticalAlign (..),
   )
 import Shoggoth.Template.Pandoc.Citeproc qualified as PandocCiteproc
-import Shoggoth.Template.Pandoc.Url as PandocUrl
+import Shoggoth.Template.Pandoc.Helper as PandocHelper
 import Text.DocLayout qualified as Doc (render)
 import Text.Pandoc as Pandoc hiding
   ( Citation (..),

@@ -60,7 +60,7 @@ library
   other-modules:
     Shoggoth.Prelude.FilePath
     Shoggoth.Prelude.Url
-    Shoggoth.Template.Pandoc.Url
+    Shoggoth.Template.Pandoc.Helper
 
   build-depends:
     , aeson                 ^>=2.0

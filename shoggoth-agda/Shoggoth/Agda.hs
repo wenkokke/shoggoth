@@ -69,6 +69,7 @@ import Shoggoth.TagSoup
     isTagOpenName,
     parseTags,
     renderTags,
+    mapIds
   )
 import System.Directory qualified as System (doesFileExist)
 
@@ -436,16 +437,7 @@ mapIdSoup f tag
     return tag
   | otherwise = AgdaSoup $ do
     cond <- inAgdaPre
-    return $ if cond then mapIdTag f tag else tag
-
-mapIdTag :: (Text -> Text) -> Tag Text -> Tag Text
-mapIdTag f (TagOpen name attrs) =
-  TagOpen
-    name
-    [ if key == "id" then (key, f value) else attr
-      | attr@(key, value) <- attrs
-    ]
-mapIdTag f tag = tag
+    return $ if cond then mapIds f tag else tag
 
 hasAgdaClass :: Tag Text -> Bool
 hasAgdaClass = hasAttribute ("class", "Agda")
