@@ -11,8 +11,8 @@ import Shoggoth.Prelude.FilePath
 
 type Url = Text
 
-isAbsolute :: Url -> Bool
-isAbsolute url = "/" `Text.isPrefixOf` url && not ("//" `Text.isPrefixOf` url)
+isAbsoluteUrl :: Url -> Bool
+isAbsoluteUrl url = "/" `Text.isPrefixOf` url && not ("//" `Text.isPrefixOf` url)
 
 removeIndexHtml :: Url -> Url
 removeIndexHtml = Text.replace "index.html" ""
@@ -22,7 +22,7 @@ removeIndexHtml = Text.replace "index.html" ""
 --   Adapted from hakyll's 'Hakyll.Web.Html.RelativizeUrls.relativizeUrls'
 relativizeUrl :: FilePath -> FilePath -> Url -> Url
 relativizeUrl outDir out url
-  | isAbsolute url = Text.pack (toRoot out) <> url
+  | isAbsoluteUrl url = Text.pack (toRoot out) <> url
   | otherwise = url
   where
     toRoot :: FilePath -> FilePath
