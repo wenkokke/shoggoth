@@ -31,4 +31,4 @@ relativizeUrl outDir out url
       | otherwise = joinPath $ map (const "..") directories
       where
         relativeOut = normaliseEx (makeRelative outDir out)
-        directories = filter (`notElem` [".", "/", "./"]) (splitDirectories (takeDirectory out))
+        directories = filter (`notElem` [".", "/", "./"]) (splitDirectories (takeDirectory relativeOut))
