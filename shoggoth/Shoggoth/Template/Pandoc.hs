@@ -19,6 +19,7 @@ module Shoggoth.Template.Pandoc
     module PandocHighlighting,
     module PandocOptions,
     module PandocHelper,
+    module PandocSelfContained,
     shiftHeadersBy,
   )
 where
@@ -36,8 +37,9 @@ import Data.Aeson (Value (Object))
 import Data.Maybe (fromMaybe)
 import Data.String (IsString (fromString))
 import Data.Text (Text)
+import Shoggoth.Configuration
 import Shoggoth.Metadata (Metadata (..), constField)
-import Shoggoth.Prelude (Action, getShakeExtra, liftEither, liftIO, readFile', Rules, newCache, (</>), need)
+import Shoggoth.Prelude (Action, Rules, getShakeExtra, liftEither, liftIO, need, newCache, readFile', (</>))
 import Shoggoth.Template.Pandoc.Builder as PandocBuilderTypes
   ( Alignment (..),
     Attr,
@@ -170,24 +172,27 @@ import Text.Pandoc.Highlighting as PandocHighlighting
   )
 import Text.Pandoc.Highlighting qualified as PandocRenamed
 import Text.Pandoc.Options as PandocOptions
-  ( ReaderOptions (..)
-  , WriterOptions (..)
-  , HTMLMathMethod (..)
-  , CiteMethod (..)
-  , ObfuscationMethod (..)
-  , HTMLSlideVariant (..)
-  , EPUBVersion (..)
-  , WrapOption (..)
-  , TopLevelDivision (..)
-  , ReferenceLocation (..)
-  , TrackChanges (..)
+  ( CiteMethod (..),
+    EPUBVersion (..),
+    HTMLMathMethod (..),
+    HTMLSlideVariant (..),
+    ObfuscationMethod (..),
+    ReaderOptions (..),
+    ReferenceLocation (..),
+    TopLevelDivision (..),
+    TrackChanges (..),
+    WrapOption (..),
+    WriterOptions (..),
   )
 import Text.Pandoc.Readers as Pandoc
+import Text.Pandoc.SelfContained as PandocSelfContained
+  ( makeDataURI,
+    makeSelfContained,
+  )
 import Text.Pandoc.Templates qualified as Template
 import Text.Pandoc.Walk as Pandoc
 import Text.Pandoc.Writers as Pandoc
 import Text.Printf (printf)
-import Shoggoth.Configuration
 
 type HighlightStyle = PandocRenamed.Style
 
@@ -197,7 +202,7 @@ runPandoc = runPandocWith ERROR
 runPandocWith :: Verbosity -> PandocIO a -> Action a
 runPandocWith v act = do
   resultOrError <- liftIO . runIO $ do
-    modifyCommonState (\st -> st { stVerbosity = v })
+    modifyCommonState (\st -> st {stVerbosity = v})
     act
   liftEither displayException resultOrError
 
@@ -214,7 +219,6 @@ pandocToHtml5 :: Pandoc -> Action Text
 pandocToHtml5 doc = do
   writerOpts <- getWriterOptions
   runPandoc $ Pandoc.writeHtml5String writerOpts doc
-
 
 -- * Citations
 
