@@ -96,7 +96,6 @@ library
 
   hs-source-dirs:  shoggoth-agda
   exposed-modules: Shoggoth.Agda
-
   if flag(install-agda)
     build-depends: Agda ==2.6.2.2
     cpp-options:   -DinstallAgda
@@ -108,7 +107,6 @@ library
 
   hs-source-dirs:  shoggoth-hsass
   exposed-modules: Shoggoth.CSS.Sass
-  
   if flag(install-sass)
     build-depends: hsass >=0.3.0
     cpp-options:   -DinstallSass
