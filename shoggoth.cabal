@@ -13,9 +13,14 @@ build-type:    Simple
 tested-with:   GHC ==8.10.7
 
 flag install-agda
-  description: Install Agda using Cabal
+  description: Install Agda
   manual:      True
   default:     False
+
+flag install-sass
+  description: Install Sass
+  manual:      True
+  default:     True
 
 common language-haskell
   default-language:   Haskell2010
@@ -89,42 +94,22 @@ library
     , vector
     , yaml
 
--- library shoggoth-agda
---   import:          language-haskell
---   visibility:      public
   hs-source-dirs:  shoggoth-agda
   exposed-modules: Shoggoth.Agda
-  build-depends:
-    , containers
-    , directory
-    , mtl
-    -- , shoggoth
-    , text
-    , text-icu            ^>=0.7.1.0
-    , text-regex-replace
 
   if flag(install-agda)
     build-depends: Agda ==2.6.2.2
     cpp-options:   -DinstallAgda
 
--- library shoggoth-hasmin
---   import:          language-haskell
---   visibility:      public
   hs-source-dirs:  shoggoth-hasmin
   exposed-modules: Shoggoth.CSS.Minify
-  build-depends:
-    , directory
-    , hasmin
-    -- , shoggoth
-    , text
+  build-depends: hasmin
 
--- library shoggoth-hsass
---   import:          language-haskell
---   visibility:      public
+
   hs-source-dirs:  shoggoth-hsass
   exposed-modules: Shoggoth.CSS.Sass
-  build-depends:
-    , directory
-    , hsass      >=0.3.0
-    -- , shoggoth
-    , text
+  
+  if flag(install-sass)
+    build-depends: hsass >=0.3.0
+    cpp-options:   -DinstallSass
+
