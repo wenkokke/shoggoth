@@ -1,5 +1,3 @@
-{-# LANGUAGE CPP #-}
-
 module Shoggoth.CSS.Sass
   ( compileSass,
     compileSassWith
@@ -7,21 +5,15 @@ module Shoggoth.CSS.Sass
 where
 
 import Shoggoth.Prelude
-
-#if installSass
 import Shoggoth.Prelude.ByteString qualified as BS (toText)
 import Data.Bitraversable (Bitraversable (..))
 import Data.Maybe (fromMaybe)
 import System.Directory as System (doesFileExist, makeAbsolute, getCurrentDirectory)
 import Text.Sass
 import Data.Text (Text)
-#else
--- TODO
-#endif
 
 -- * Sass
 
-#if installSass
 -- | Compile Sass.
 compileSass :: FilePath -> Action Text
 compileSass = compileSassWith []
@@ -68,6 +60,3 @@ minCssImporter includePath priority =
           else do
             return []
     }
-#else
--- TODO
-#endif

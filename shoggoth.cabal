@@ -12,13 +12,18 @@ category:      Web
 build-type:    Simple
 tested-with:   GHC ==8.10.7
 
-flag install-agda
-  description: Install Agda
+flag with-agda
+  description: Use Agda as a library
   manual:      True
   default:     False
 
-flag install-sass
-  description: Install Sass
+flag with-hsass
+  description: Use hsass
+  manual:      True
+  default:     True
+
+flag with-hasmin
+  description: Use hasmin
   manual:      True
   default:     True
 
@@ -28,8 +33,10 @@ common language-haskell
   default-extensions:
     DeriveAnyClass
     DeriveGeneric
+    DerivingStrategies
     FlexibleContexts
     FlexibleInstances
+    GeneralizedNewtypeDeriving
     ImplicitParams
     ImportQualifiedPost
     LambdaCase
@@ -44,8 +51,6 @@ common language-haskell
     TypeApplications
     TypeFamilies
     TypeSynonymInstances
-    GeneralizedNewtypeDeriving
-    DerivingStrategies
 
 library
   import:          language-haskell
@@ -57,10 +62,10 @@ library
     Shoggoth.Prelude
     Shoggoth.Prelude.ByteString
     Shoggoth.Routing
+    Shoggoth.TagSoup
     Shoggoth.Template.Pandoc
     Shoggoth.Template.Pandoc.Builder
     Shoggoth.Template.Pandoc.Citeproc
-    Shoggoth.TagSoup
 
   other-modules:
     Shoggoth.Prelude.FilePath
@@ -96,18 +101,17 @@ library
 
   hs-source-dirs:  shoggoth-agda
   exposed-modules: Shoggoth.Agda
-  if flag(install-agda)
+
+  if flag(with-agda)
     build-depends: Agda ==2.6.2.2
     cpp-options:   -DinstallAgda
 
-  hs-source-dirs:  shoggoth-hasmin
-  exposed-modules: Shoggoth.CSS.Minify
-  build-depends: hasmin
+  if flag(with-hsass)
+    hs-source-dirs:  shoggoth-hasmin
+    exposed-modules: Shoggoth.CSS.Minify
+    build-depends:   hasmin
 
-
-  hs-source-dirs:  shoggoth-hsass
-  exposed-modules: Shoggoth.CSS.Sass
-  if flag(install-sass)
-    build-depends: hsass >=0.3.0
-    cpp-options:   -DinstallSass
-
+  if flag(with-hsass)
+    hs-source-dirs:  shoggoth-hsass
+    exposed-modules: Shoggoth.CSS.Sass
+    build-depends:   hsass >=0.3.0
