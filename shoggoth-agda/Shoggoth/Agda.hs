@@ -52,8 +52,6 @@ import Data.Maybe (fromMaybe, maybeToList)
 import Data.Monoid (Endo (..))
 import Data.Text (Text)
 import Data.Text qualified as Text
-import Data.Text.ICU qualified as RE
-import Data.Text.ICU.Replace qualified as RE
 import Data.Text.IO qualified as Text
 import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
@@ -235,28 +233,21 @@ makeLocalLinkFixer library@Library {..} = do
 
 makeLibraryLinkFixer :: MonadIO m => Library -> m (Url -> Url)
 makeLibraryLinkFixer lib@Library {..} = do
-  regex <- reLibraryLink lib
-  return $ RE.replaceAll regex (RE.rtext canonicalBaseUrl <> "/$1.html$2")
-
-reLibraryLink :: MonadIO m => Library -> m RE.Regex
-reLibraryLink lib = do
-  modNames <- getAgdaModulesInLibrary lib
-  let modPatns = Text.replace "." "\\." <$> modNames
-  let modPatn = Text.concat . List.intersperse "|" $ modPatns
-  let hrefPatn = "(" <> modPatn <> ")\\.html(#[^\"^']+)?"
-  return (RE.regex [] hrefPatn)
+  moduleNames <- getAgdaModulesInLibrary lib
+  return $ \url ->
+    if any (`Text.isPrefixOf` url) moduleNames
+      then canonicalBaseUrl <> "/" <> url
+      else url
 
 --------------------------------------------------------------------------------
 -- Fix references to the Agda builtin modules
 --------------------------------------------------------------------------------
 
 makeBuiltinLinkFixer :: Library -> (Url -> Url)
-makeBuiltinLinkFixer Library {..} = do
-  RE.replaceAll reAgdaBuiltinLink (RE.rtext canonicalBaseUrl <> "/$1.html$2")
-
--- | An ICU regular expression which matches links to the Agda builtin modules.
-reAgdaBuiltinLink :: RE.Regex
-reAgdaBuiltinLink = RE.regex [] "(Agda\\.[A-Za-z\\.]+)\\.html(#[^\"^']+)?"
+makeBuiltinLinkFixer Library {..} url =
+  if "Agda." `Text.isPrefixOf` url
+    then canonicalBaseUrl <> "/" <> url
+    else url
 
 --------------------------------------------------------------------------------
 -- A library instance for the standard library

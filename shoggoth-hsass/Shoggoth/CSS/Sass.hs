@@ -1,16 +1,17 @@
 module Shoggoth.CSS.Sass
   ( compileSass,
-    compileSassWith
+    compileSassWith,
   )
 where
 
-import Shoggoth.Prelude
-import Shoggoth.Prelude.ByteString qualified as BS (toText)
 import Data.Bitraversable (Bitraversable (..))
 import Data.Maybe (fromMaybe)
-import System.Directory as System (doesFileExist, makeAbsolute, getCurrentDirectory)
-import Text.Sass
 import Data.Text (Text)
+import Data.Text qualified as Text
+import Data.Text.Encoding qualified as Text
+import Shoggoth.Prelude
+import System.Directory as System (doesFileExist, getCurrentDirectory, makeAbsolute)
+import Text.Sass
 
 -- * Sass
 
@@ -27,11 +28,11 @@ compileSassWith loadPaths filePath = do
     resultOrErrorMsg <- liftIO $ bitraverse errorMessage return resultOrError
     result <- liftIO (liftEither id resultOrErrorMsg)
     -- Extract generated CSS source and included files
-    css <- BS.toText (resultString result)
+    let cssText = Text.decodeUtf8 (resultString result)
     includes <- resultIncludes result
     currentWorkingDirectory <- getCurrentDirectory
     let relativeIncludes = makeRelative currentWorkingDirectory <$> includes
-    return (css, relativeIncludes)
+    return (cssText, relativeIncludes)
 
   -- Inform Shake of the dependencies used during compilation
   trackRead includes

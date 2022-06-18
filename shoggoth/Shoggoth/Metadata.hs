@@ -47,6 +47,9 @@ import Data.List qualified as List
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Data.Text qualified as Text
+import Data.Text.Encoding qualified as Text
+import Data.Text.Lazy qualified as LazyText
+import Data.Text.Lazy.Encoding qualified as LazyText
 import Data.Time (LocalTime (LocalTime), UTCTime, defaultTimeLocale, formatTime, fromGregorian, getCurrentTime, localTimeToUTC, midday, utc)
 import Data.Time.Format.ISO8601 (iso8601Show)
 import Data.Vector qualified as Vector (fromList)
@@ -54,7 +57,6 @@ import Data.Yaml qualified as Yaml
 import Shoggoth.Configuration
 import Shoggoth.PostInfo qualified as PostInfo
 import Shoggoth.Prelude
-import Shoggoth.Prelude.ByteString qualified as ByteString
 import Shoggoth.TagSoup qualified as TagSoup
 import Shoggoth.Template.Pandoc.Builder qualified as Builder
 import System.Directory (getModificationTime)
@@ -142,15 +144,14 @@ readFileWithMetadataIO inputFile = liftIO $ do
   case liftFrontmatterResult (Frontmatter.parseYamlFrontmatter contents) of
     -- Parse succeeded
     Right (metadata, body) -> do
-      body <- ByteString.toText body
-      return (metadata, body)
+      return (metadata, Text.decodeUtf8 body)
     -- Parse failed; is there a header?
     Left errorMessage -> do
-      body <- ByteString.toText contents
-      let hasHeader = "---" `Text.isPrefixOf` body
+      let bodyText = Text.decodeUtf8 contents
+      let hasHeader = "---" `Text.isPrefixOf` bodyText
       if hasHeader
         then error $ unlines ["Parse error in header: " <> inputFile, errorMessage]
-        else return (mempty, body)
+        else return (mempty, bodyText)
   where
     liftFrontmatterResult :: (FromJSON a) => Frontmatter.Result a -> Either String (a, ByteString)
     liftFrontmatterResult (Frontmatter.Done body metadata) = Right (metadata, body)
@@ -167,7 +168,7 @@ writeYamlIO = Yaml.encodeFile
 -- * Instances
 
 instance Show Metadata where
-  show (Metadata obj) = Text.unpack $ unsafePerformIO $ ByteString.toTextLazy $ encode obj
+  show (Metadata obj) = LazyText.unpack (LazyText.decodeUtf8 $ encode obj)
 
 instance ToJSON Metadata where
   toJSON (Metadata obj) = Object obj

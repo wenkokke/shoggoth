@@ -60,7 +60,6 @@ library
     Shoggoth.Metadata
     Shoggoth.PostInfo
     Shoggoth.Prelude
-    Shoggoth.Prelude.ByteString
     Shoggoth.Routing
     Shoggoth.TagSoup
     Shoggoth.Template.Pandoc
@@ -91,8 +90,6 @@ library
     , shake
     , tagsoup
     , text
-    , text-icu              ^>=0.7.1.0
-    , text-regex-replace
     , time
     , transformers
     , unordered-containers
