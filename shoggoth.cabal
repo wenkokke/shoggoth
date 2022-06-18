@@ -17,16 +17,6 @@ flag with-agda
   manual:      True
   default:     False
 
-flag with-hsass
-  description: Use hsass
-  manual:      True
-  default:     True
-
-flag with-hasmin
-  description: Use hasmin
-  manual:      True
-  default:     True
-
 common language-haskell
   default-language:   Haskell2010
   build-depends:      base
@@ -102,13 +92,3 @@ library
   if flag(with-agda)
     build-depends: Agda ==2.6.2.2
     cpp-options:   -DinstallAgda
-
-  if flag(with-hsass)
-    hs-source-dirs:  shoggoth-hasmin
-    exposed-modules: Shoggoth.CSS.Minify
-    build-depends:   hasmin
-
-  if flag(with-hsass)
-    hs-source-dirs:  shoggoth-hsass
-    exposed-modules: Shoggoth.CSS.Sass
-    build-depends:   hsass >=0.3.0
