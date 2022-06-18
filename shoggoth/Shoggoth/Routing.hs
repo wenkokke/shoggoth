@@ -206,7 +206,7 @@ route current = do
 routeUrl :: (?routingTable :: RoutingTable) => FilePath -> Action Url
 routeUrl current = do
   outDir <- getOutputDirectory
-  out <- route current
+  out <- iterM (`routeNextPureFirst` ?routingTable) current
   return . Text.pack $ "/" <> makeRelative outDir out
 
 -- route' :: (MonadError String m, ?routingTable :: RoutingTable) => FilePath -> m Output
