@@ -71,6 +71,7 @@ library
     , data-default-class
     , directory
     , doclayout
+    , doctemplates
     , filemanip             ^>=0.3
     , filepath
     , frontmatter

@@ -189,7 +189,7 @@ import Text.Pandoc.SelfContained as PandocSelfContained
   ( makeDataURI,
     makeSelfContained,
   )
-import Text.Pandoc.Templates qualified as Template
+import Text.DocTemplates qualified as Template
 import Text.Pandoc.Walk as Pandoc
 import Text.Pandoc.Writers as Pandoc
 import Text.Printf (printf)
@@ -228,11 +228,14 @@ processCitations doc =
 
 -- * Templates
 
+instance Template.TemplateMonad Action where
+  getPartial = readFile'
+
 type Template = Template.Template Text
 
 compileTemplate :: FilePath -> Text -> Action Template
 compileTemplate filepath contents = do
-  tplOrError <- liftIO (Template.compileTemplate filepath contents)
+  tplOrError <- Template.compileTemplate filepath contents
   liftEither id tplOrError
 
 compileTemplateFile :: FilePath -> Action Template
