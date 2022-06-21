@@ -1,8 +1,9 @@
 module Shoggoth.Configuration where
 
 import Data.Default.Class (Default (def))
+import Data.List qualified as List
 import Data.Maybe (fromMaybe)
-import Shoggoth.Prelude (Action, getShakeExtra)
+import Shoggoth.Prelude (Action, getEnvWithDefault, getShakeExtra)
 
 newtype CacheDirectory = CacheDirectory {fromCacheDirectory :: FilePath}
 
@@ -33,3 +34,13 @@ getTemplateDirectory :: Action FilePath
 getTemplateDirectory = do
   maybeTemplateDirectory <- getShakeExtra @TemplateDirectory
   return . fromTemplateDirectory . fromMaybe def $ maybeTemplateDirectory
+
+data Mode = Production | Development
+  deriving (Eq, Show)
+
+getMode :: Action Mode
+getMode = do
+  modeString <- getEnvWithDefault "production" "MODE"
+  if "dev" `List.isPrefixOf` modeString
+    then return Development
+    else return Production
