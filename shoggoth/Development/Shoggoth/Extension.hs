@@ -3,10 +3,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Shoggoth
-  ( Extension (..),
-  )
-where
+module Development.Shoggoth.Extension where
 
 import Control.Monad (forM, liftM2)
 import Control.Monad.Identity (Identity (Identity, runIdentity))
@@ -30,10 +27,7 @@ import Development.Shake (FilePattern, Resource, RuleResult, ShakeOptions (Shake
 import Development.Shake qualified as Shake
 import Development.Shake.Classes (Hashable)
 
-data SomeValue
-  = forall a.
-    (Typeable a) =>
-    SomeValue a
+data SomeValue = forall a. (Typeable a) => SomeValue a
 
 indexValue :: SomeValue -> (TypeRep, Dynamic)
 indexValue (SomeValue (value :: a)) = (typeRep (Proxy :: Proxy a), toDyn value)
