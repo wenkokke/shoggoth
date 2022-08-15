@@ -8,17 +8,24 @@ module Shoggoth.Routing
     pattern (:?),
     Router (..),
     route,
+    output,
     routeUrl,
+    url,
     routeSource,
+    source,
     routeNext,
+    next,
     routePrev,
+    prev,
     routeAnchor,
+    anchor,
     sources,
     outputs,
     permalinkRouter,
   )
 where
 
+import Control.Arrow (Arrow (second))
 import Control.Monad (forM, join, (>=>))
 import Control.Monad.Except (MonadError (throwError))
 import Control.Monad.Identity (Identity (Identity, runIdentity))
@@ -30,13 +37,12 @@ import Data.Set qualified as Set
 import Data.String (IsString, fromString)
 import Data.Text (Text)
 import Data.Text qualified as Text
+import Data.Traversable (for)
 import Shoggoth.Configuration (getOutputDirectory)
 import Shoggoth.Metadata (readYamlFrontmatter, (^.))
-import Shoggoth.Prelude (Action, FilePattern, getDirectoryFiles, getShakeExtra, normaliseEx, Url, makeRelative)
+import Shoggoth.Prelude (Action, FilePattern, Url, getDirectoryFiles, getShakeExtra, makeRelative, normaliseEx)
 import Shoggoth.Prelude.FilePath ((</>))
 import Text.Printf (printf)
-import Data.Traversable (for)
-import Control.Arrow (Arrow(second))
 
 -- | Route files based on their permalink.
 permalinkRouter :: FilePath -> Action FilePath
@@ -125,7 +131,7 @@ composeStages stages = second normaliseEx <$> composeStagesAcc [] stages
     composeStagesAcc anchors (anchor :@ stages) = composeStagesAcc (anchor : anchors) stages
 
 create :: FilePath -> RoutingTable
-create out = mempty { routingTableOutputs = Set.singleton out }
+create out = mempty {routingTableOutputs = Set.singleton out}
 
 infix 3 |->
 
@@ -143,13 +149,13 @@ class Router router where
 
 instance Router Output where
   [source] |-> output =
-    let normalSource = normaliseEx source in
-    let normalOutput = normaliseEx output in
-    mempty
-      { routingTableSources = Set.singleton normalSource,
-        routingTableOutputs = Set.singleton normalOutput,
-        routingTableLinks = Bimap.singleton normalSource normalOutput
-      }
+    let normalSource = normaliseEx source
+     in let normalOutput = normaliseEx output
+         in mempty
+              { routingTableSources = Set.singleton normalSource,
+                routingTableOutputs = Set.singleton normalOutput,
+                routingTableLinks = Bimap.singleton normalSource normalOutput
+              }
   _ |-> output =
     error $ "Cannot route multiple sources to single output " <> output
 
@@ -197,77 +203,81 @@ instance Router (Source -> Action Output) where
 
 -- * Forward routing
 
+{-# DEPRECATED route "Use output instead." #-}
 route :: (?routingTable :: RoutingTable) => FilePath -> Action Output
-route current = do
+route = output
+
+output :: (?routingTable :: RoutingTable) => FilePath -> Action Output
+output current = do
   iterM step =<< routeNext current
   where
     step current = routeNextPureFirst current ?routingTable
 
+{-# DEPRECATED routeUrl "Use url instead." #-}
 routeUrl :: (?routingTable :: RoutingTable) => FilePath -> Action Url
-routeUrl current = do
+routeUrl = url
+
+url :: (?routingTable :: RoutingTable) => FilePath -> Action Url
+url current = do
   outDir <- getOutputDirectory
   out <- iterM (`routeNextPureFirst` ?routingTable) current
   return . Text.pack $ "/" <> makeRelative outDir out
 
--- route' :: (MonadError String m, ?routingTable :: RoutingTable) => FilePath -> m Output
--- route' current = runIdentity . iterM step <$> routeNext' current
---   where
---     step current = Identity $ routeNextPureOnly current ?routingTable
-
+{-# DEPRECATED routeNext "Use next instead." #-}
 routeNext :: (?routingTable :: RoutingTable) => FilePath -> Action FilePath
-routeNext current =
+routeNext = next
+
+next :: (?routingTable :: RoutingTable) => FilePath -> Action FilePath
+next current =
   either (\_ -> fail $ printf "No route from %s" current) return
     =<< routeNextPureFirst current ?routingTable
-
--- routeNext' :: (MonadError String m, ?routingTable :: RoutingTable) => FilePath -> m FilePath
--- routeNext' current = routeNextPureOnly current ?routingTable
 
 routeNextPureFirst :: FilePath -> RoutingTable -> Action (Either String FilePath)
 routeNextPureFirst current = shortCircuit (routeNextPureOnly current)
 
 routeNextPureOnly :: MonadError String m => FilePath -> RoutingTable -> m FilePath
 routeNextPureOnly current routingTable =
-  let normalCurrent = normaliseEx current in
-    maybe (throwError $ printf "No pure route from %s" normalCurrent) return $
-      Bimap.lookup normalCurrent (routingTableLinks routingTable)
+  let normalCurrent = normaliseEx current
+   in maybe (throwError $ printf "No pure route from %s" normalCurrent) return $
+        Bimap.lookup normalCurrent (routingTableLinks routingTable)
 
 -- * Backward routing
 
+{-# DEPRECATED routeSource "Use source instead." #-}
 routeSource :: (?routingTable :: RoutingTable) => FilePath -> Action Source
-routeSource current = iterM step current
+routeSource = source
+
+source :: (?routingTable :: RoutingTable) => FilePath -> Action Source
+source current = iterM step current
   where
     step current = routePrevPureFirst current ?routingTable
 
--- routeSource' :: (MonadError String m, ?routingTable :: RoutingTable) => FilePath -> m Source
--- routeSource' current = runIdentity . iterM step <$> routePrev' current
---   where
---     step current = Identity $ routePrevPureOnly current ?routingTable
-
+{-# DEPRECATED routePrev "Use prev instead." #-}
 routePrev :: (?routingTable :: RoutingTable) => FilePath -> Action FilePath
-routePrev current =
+routePrev = prev
+
+prev :: (?routingTable :: RoutingTable) => FilePath -> Action FilePath
+prev current =
   either (\_ -> fail $ printf "No route to %s" current) return
     =<< routePrevPureFirst current ?routingTable
-
--- routePrev' :: (MonadError String m, ?routingTable :: RoutingTable) => FilePath -> m FilePath
--- routePrev' current =
---   routePrevPureOnly current ?routingTable
 
 routePrevPureFirst :: FilePath -> RoutingTable -> Action (Either String FilePath)
 routePrevPureFirst current = shortCircuit (routePrevPureOnly current)
 
 routePrevPureOnly :: MonadError String m => FilePath -> RoutingTable -> m FilePath
 routePrevPureOnly current routingTable =
-  let normalCurrent = normaliseEx current in
-    maybe (throwError $ printf "No pure route to %s" normalCurrent) return $
-      Bimap.lookupR normalCurrent (routingTableLinks routingTable)
+  let normalCurrent = normaliseEx current
+   in maybe (throwError $ printf "No pure route to %s" normalCurrent) return $
+        Bimap.lookupR normalCurrent (routingTableLinks routingTable)
 
 -- * Anchors
 
+{-# DEPRECATED routeAnchor "Use anchor instead." #-}
 routeAnchor :: (?routingTable :: RoutingTable) => Anchor -> Source -> Action FilePath
-routeAnchor anchor source = routeAnchorPureFirst anchor source ?routingTable
+routeAnchor = anchor
 
--- routeAnchor' :: (MonadError String m, ?routingTable :: RoutingTable) => Anchor -> Source -> m FilePath
--- routeAnchor' anchor source = routeAnchorPureOnly anchor source ?routingTable
+anchor :: (?routingTable :: RoutingTable) => Anchor -> Source -> Action FilePath
+anchor anchor source = routeAnchorPureFirst anchor source ?routingTable
 
 routeAnchorPureFirst :: Anchor -> Source -> RoutingTable -> Action FilePath
 routeAnchorPureFirst anchor source routingTable =
@@ -276,23 +286,17 @@ routeAnchorPureFirst anchor source routingTable =
 
 routeAnchorPureOnly :: MonadError String m => Anchor -> Source -> RoutingTable -> m FilePath
 routeAnchorPureOnly anchor source routingTable =
-  let normalSource = normaliseEx source in
-  maybe (throwError $ printf "No pure anchor %s for %s" (show anchor) normalSource) return $
-    Map.lookup (anchor, normalSource) (routingTableAnchors routingTable)
+  let normalSource = normaliseEx source
+   in maybe (throwError $ printf "No pure anchor %s for %s" (show anchor) normalSource) return $
+        Map.lookup (anchor, normalSource) (routingTableAnchors routingTable)
 
 -- * All source or output files
 
 outputs :: (?routingTable :: RoutingTable) => Action [Output]
 outputs = Set.toAscList <$> gather routingTableOutputs ?routingTable
 
--- outputs' :: (?routingTable :: RoutingTable) => [Output]
--- outputs' = Set.toAscList $ routingTableOutputs ?routingTable
-
 sources :: (?routingTable :: RoutingTable) => Action [Source]
 sources = Set.toAscList <$> gather routingTableSources ?routingTable
-
--- sources' :: (?routingTable :: RoutingTable) => [Source]
--- sources' = Set.toAscList $ routingTableSources ?routingTable
 
 -- * Helpers
 
