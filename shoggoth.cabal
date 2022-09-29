@@ -62,7 +62,7 @@ library
     Shoggoth.Template.Pandoc.Helper
 
   build-depends:
-    , aeson                 ^>=2.0
+    , aeson                 >=2
     , bimap
     , bytestring
     , charsetdetect
@@ -73,7 +73,7 @@ library
     , doclayout
     , doctemplates
     , extra
-    , filemanip             ^>=0.3
+    , filemanip             >=0.3
     , filepath
     , frontmatter
     , mtl
