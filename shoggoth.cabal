@@ -10,7 +10,7 @@ maintainer:    wenkokke@users.noreply.github.com
 copyright:     © 2016—2022 Wen Kokke
 category:      Web
 build-type:    Simple
-tested-with:   GHC ==8.10.7
+tested-with:   GHC ==8.10.7 || ==9.0.2 || ==9.2.4
 
 flag with-agda
   description: Use Agda as a library
