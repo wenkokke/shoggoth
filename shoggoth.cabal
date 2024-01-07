@@ -65,7 +65,7 @@ library
     , aeson                 >=2
     , bimap
     , bytestring
-    , charsetdetect
+    , charsetdetect         >=1.1.0.3
     , citeproc
     , containers
     , data-default-class
