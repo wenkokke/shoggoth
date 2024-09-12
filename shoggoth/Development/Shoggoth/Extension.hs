@@ -2,6 +2,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeOperators #-}
 
 module Development.Shoggoth.Extension where
 
@@ -34,14 +35,14 @@ indexValue (SomeValue (value :: a)) = (typeRep (Proxy :: Proxy a), toDyn value)
 
 type ShakeCache q a = (Typeable q, Typeable a, Eq q, Hashable q)
 
-data SomeCache = forall q a. ShakeCache q a => SomeCache (q -> Shake.Action a)
+data SomeCache = forall q a. (ShakeCache q a) => SomeCache (q -> Shake.Action a)
 
 setupCache :: SomeCache -> Shake.Rules (TypeRep, Dynamic)
 setupCache (SomeCache cache) = indexValue . SomeValue <$> Shake.newCache cache
 
 type ShakeOracle q a = (Typeable q, Typeable a, RuleResult q ~ a, ShakeValue q, ShakeValue a)
 
-data SomeOracle = forall q a. ShakeOracle q a => SomeOracle (q -> Shake.Action a)
+data SomeOracle = forall q a. (ShakeOracle q a) => SomeOracle (q -> Shake.Action a)
 
 setupOracle :: SomeOracle -> Shake.Rules (TypeRep, Dynamic)
 setupOracle (SomeOracle oracle) = indexValue . SomeValue <$> Shake.addOracle oracle
@@ -76,18 +77,18 @@ data ExtensionT (m :: Type -> Type) = ExtensionT
 mapExtensionT :: (forall a. m a -> n a) -> ExtensionT m -> ExtensionT n
 mapExtensionT m2n (ExtensionT e o r c) = ExtensionT e (m2n o) (m2n r) (m2n c)
 
-sequenceExtensionT :: Monad m => ExtensionT m -> m ExtensionData
+sequenceExtensionT :: (Monad m) => ExtensionT m -> m ExtensionData
 sequenceExtensionT (ExtensionT e o r c) =
   o >>= \o' ->
     r >>= \r' ->
       c >>= \c' ->
         return $ ExtensionT e (Identity o') (Identity r') (Identity c')
 
-instance Monad m => Semigroup (ExtensionT m) where
+instance (Monad m) => Semigroup (ExtensionT m) where
   ExtensionT e1 o1 r1 c1 <> ExtensionT e2 o2 r2 c2 =
     ExtensionT (e1 <> e2) (liftM2 (<>) o1 o2) (liftM2 (<>) r1 r2) (liftM2 (<>) c1 c2)
 
-instance Monad m => Monoid (ExtensionT m) where
+instance (Monad m) => Monoid (ExtensionT m) where
   mempty = ExtensionT mempty (return mempty) (return mempty) (return mempty)
 
 setupExtension :: Extension -> ExtensionT Shake.Rules
@@ -104,7 +105,7 @@ newtype Action a = Action
   { unAction :: ReaderT ExtensionData Shake.Action a
   }
 
-lookupValue :: forall a. Typeable a => Action (Maybe a)
+lookupValue :: forall a. (Typeable a) => Action (Maybe a)
 lookupValue = Action $ do
   extensionData@ExtensionT {..} <- ask
   let valueTypeRep = typeRep (Proxy :: Proxy a)
@@ -115,7 +116,7 @@ lookupValue = Action $ do
 liftAction :: Shake.Action a -> Action a
 liftAction = Action . lift
 
-lookupCache :: forall q a. ShakeCache q a => Action (Maybe (q -> Action a))
+lookupCache :: forall q a. (ShakeCache q a) => Action (Maybe (q -> Action a))
 lookupCache = Action $ do
   extensionData@ExtensionT {..} <- ask
   let cacheTypeRep = typeRep (Proxy :: Proxy (q -> Shake.Action a))
@@ -123,7 +124,7 @@ lookupCache = Action $ do
     Nothing -> return Nothing
     Just dy -> return $ (liftAction .) <$> fromDynamic dy
 
-lookupOracle :: forall q a. ShakeOracle q a => Action (Maybe (q -> Action a))
+lookupOracle :: forall q a. (ShakeOracle q a) => Action (Maybe (q -> Action a))
 lookupOracle = Action $ do
   extensionData@ExtensionT {..} <- ask
   let oracleTypeRep = typeRep (Proxy :: Proxy (q -> Shake.Action a))

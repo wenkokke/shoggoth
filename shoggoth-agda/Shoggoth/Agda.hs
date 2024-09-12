@@ -57,7 +57,8 @@ import Data.Typeable (Typeable)
 import GHC.Generics (Generic)
 import Shoggoth.Configuration (getCacheDirectory)
 import Shoggoth.Prelude
-import Shoggoth.Routing
+import Shoggoth.Routing (RoutingTable)
+import Shoggoth.Routing qualified as Route (url)
 import Shoggoth.TagSoup
   ( Attribute,
     Column,
@@ -65,9 +66,9 @@ import Shoggoth.TagSoup
     Tag (TagOpen, TagPosition),
     isTagCloseName,
     isTagOpenName,
+    mapIds,
     parseTags,
     renderTags,
-    mapIds
   )
 import System.Directory qualified as System (doesFileExist)
 
@@ -216,7 +217,7 @@ makeLocalLinkFixer library@Library {..} = do
   moduleRoutes <- forM files $ \(includePath, file) -> do
     let src = libraryRoot </> includePath </> file
     let moduleName = modulePathToName file
-    url <- routeUrl src
+    url <- Route.url src
     return (moduleName, url)
   let moduleRoutingTable = Map.fromList moduleRoutes
 
@@ -231,7 +232,7 @@ makeLocalLinkFixer library@Library {..} = do
 -- Fix references to an external library with a canonical URL
 --------------------------------------------------------------------------------
 
-makeLibraryLinkFixer :: MonadIO m => Library -> m (Url -> Url)
+makeLibraryLinkFixer :: (MonadIO m) => Library -> m (Url -> Url)
 makeLibraryLinkFixer lib@Library {..} = do
   moduleNames <- getAgdaModulesInLibrary lib
   return $ \url ->
@@ -278,7 +279,7 @@ makeStandardLibraryOracle libraryRoot = do
 getStandardLibrary :: Action Library
 getStandardLibrary = askOracle $ AgdaStandardLibraryQuery ()
 
-getStandardLibraryIO :: MonadIO m => FilePath -> m Library
+getStandardLibraryIO :: (MonadIO m) => FilePath -> m Library
 getStandardLibraryIO libraryRoot = do
   let includePaths = ["src"]
   standardLibraryVersion <- getStandardLibraryVersionIO libraryRoot
@@ -291,7 +292,7 @@ makeStandardLibraryCanonicalBaseUrl standardLibraryVersion =
   "https://agda.github.io/agda-stdlib/" <> standardLibraryVersion
 
 -- | Get the standard library version.
-getStandardLibraryVersionIO :: MonadIO m => FilePath -> m Text
+getStandardLibraryVersionIO :: (MonadIO m) => FilePath -> m Text
 getStandardLibraryVersionIO dir = liftIO $ do
   --
   -- NOTE: Version detection depends on the fact that the standard library
@@ -336,25 +337,25 @@ modulePathToName path = Text.map sepToDot (Text.pack $ dropExtensions path)
     sepToDot c = if isPathSeparator c then '.' else c
 
 -- | Guess the module path based on the filename and the library.
-resolveFileInfo :: MonadError String m => [Library] -> FilePath -> m AgdaFileInfo
+resolveFileInfo :: (MonadError String m) => [Library] -> FilePath -> m AgdaFileInfo
 resolveFileInfo libs src = fromCandidates (resolveFileInfoForLibraries libs)
   where
-    resolveFileInfoForLibraries :: MonadPlus m => [Library] -> m AgdaFileInfo
+    resolveFileInfoForLibraries :: (MonadPlus m) => [Library] -> m AgdaFileInfo
     resolveFileInfoForLibraries libs =
       msum [resolveFileInfoForLibrary lib | lib <- libs]
       where
-        resolveFileInfoForLibrary :: MonadPlus m => Library -> m AgdaFileInfo
+        resolveFileInfoForLibrary :: (MonadPlus m) => Library -> m AgdaFileInfo
         resolveFileInfoForLibrary lib =
           msum [resolveFileInfoForIncludePath (libraryRoot lib) includePath | includePath <- includePaths lib]
           where
-            resolveFileInfoForIncludePath :: MonadPlus m => FilePath -> FilePath -> m AgdaFileInfo
+            resolveFileInfoForIncludePath :: (MonadPlus m) => FilePath -> FilePath -> m AgdaFileInfo
             resolveFileInfoForIncludePath libraryRoot includePath
               | src `inDirectory` fullIncludePath =
-                let modulePath = makeRelative fullIncludePath src
-                    moduleName = modulePathToName modulePath
-                    outputFileForHtml = Text.unpack moduleName <.> "md"
-                    outputFileForLaTex = replaceExtensions modulePath "tex"
-                 in return (AgdaFileInfo lib includePath modulePath moduleName outputFileForLaTex outputFileForHtml)
+                  let modulePath = makeRelative fullIncludePath src
+                      moduleName = modulePathToName modulePath
+                      outputFileForHtml = Text.unpack moduleName <.> "md"
+                      outputFileForLaTex = replaceExtensions modulePath "tex"
+                   in return (AgdaFileInfo lib includePath modulePath moduleName outputFileForLaTex outputFileForHtml)
               | otherwise = mzero
               where
                 fullIncludePath = normaliseEx (libraryRoot </> includePath)
@@ -421,14 +422,14 @@ mapIdSoup f tag@(TagPosition r c) = AgdaSoup $ do
   return tag
 mapIdSoup f tag
   | isPreOpen tag = AgdaSoup $ do
-    State.modify (openPreTag tag)
-    return tag
+      State.modify (openPreTag tag)
+      return tag
   | isPreClose tag = AgdaSoup $ do
-    State.modify (closePreTag tag)
-    return tag
+      State.modify (closePreTag tag)
+      return tag
   | otherwise = AgdaSoup $ do
-    cond <- inAgdaPre
-    return $ if cond then mapIds f tag else tag
+      cond <- inAgdaPre
+      return $ if cond then mapIds f tag else tag
 
 hasAgdaClass :: Tag Text -> Bool
 hasAgdaClass = hasAttribute ("class", "Agda")
@@ -453,13 +454,13 @@ inAgdaPre = do
 --------------------------------------------------------------------------------
 
 -- | Get module names for all Agda modules in a library.
-getAgdaModulesInLibrary :: MonadIO m => Library -> m [ModuleName]
+getAgdaModulesInLibrary :: (MonadIO m) => Library -> m [ModuleName]
 getAgdaModulesInLibrary lib = do
   files <- getAgdaFilesInLibrary lib
   return [modulePathToName file | (includePath, file) <- files]
 
 -- | Get file paths for each Agda file in the library, together with its include directory.
-getAgdaFilesInLibrary :: MonadIO m => Library -> m [(FilePath, FilePath)]
+getAgdaFilesInLibrary :: (MonadIO m) => Library -> m [(FilePath, FilePath)]
 getAgdaFilesInLibrary lib@Library {..} = do
   filesByIncludePath <- forM includePaths $ \includePath -> do
     files <- getAgdaFilesInDirectory (libraryRoot </> includePath)
@@ -467,7 +468,7 @@ getAgdaFilesInLibrary lib@Library {..} = do
   return $ concat filesByIncludePath
 
 -- | Get file paths for each Agda file in the directory.
-getAgdaFilesInDirectory :: MonadIO m => FilePath -> m [FilePath]
+getAgdaFilesInDirectory :: (MonadIO m) => FilePath -> m [FilePath]
 getAgdaFilesInDirectory dir =
   liftIO $
     getDirectoryFilesIO dir ["//*.agda", "//*.lagda", "//*.lagda.md", "//*.lagda.org", "//*.lagda.rst", "//*.lagda.tex"]
